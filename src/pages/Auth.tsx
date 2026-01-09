@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, Loader2, Mail, Lock } from "lucide-react";
+import { BarChart3, Loader2, Mail, Lock, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +21,7 @@ const Auth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
+    if (!email || !password || (!isLogin && !fullName)) {
       toast({
         variant: "destructive",
         title: "Campos obrigatórios",
@@ -79,6 +80,11 @@ const Auth = () => {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+            }
+          }
         });
 
         if (error) {
@@ -101,12 +107,22 @@ const Auth = () => {
         }
 
         if (data.user) {
+          // Criar perfil do usuário na tabela user_profiles
+          await (supabase as any)
+            .from('user_profiles')
+            .insert({
+              id: data.user.id,
+              full_name: fullName.trim(),
+              email: email,
+            });
+
           toast({
             title: "Conta criada com sucesso!",
             description: "Verifique seu email para confirmar a conta. Você já pode fazer login!",
           });
           // Alternar para a aba de login após cadastro bem-sucedido
           setIsLogin(true);
+          setFullName("");
           setPassword("");
         }
       }
@@ -155,6 +171,25 @@ const Auth = () => {
 
               <TabsContent value={isLogin ? "login" : "signup"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {!isLogin && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fullName">Nome Completo</Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                        <Input
+                          id="fullName"
+                          type="text"
+                          placeholder="Seu nome completo"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          className="pl-10"
+                          disabled={loading}
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <div className="relative">

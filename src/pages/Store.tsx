@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Search, Plus, Info, 
+  Search, Plus, Info, Edit,
   Dumbbell, UtensilsCrossed, Calculator, 
   PawPrint, Building, DollarSign, Users, 
   Percent, TrendingUp, Target, Clock,
@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import AddTemplateModal from "@/components/store/AddTemplateModal";
+import EditTemplateModal from "@/components/store/EditTemplateModal";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface Indicator {
@@ -69,6 +70,8 @@ const Store = () => {
   const [addingIndicator, setAddingIndicator] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
+  const [showEditTemplateModal, setShowEditTemplateModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -402,6 +405,25 @@ const Store = () => {
         onSuccess={fetchIndicators}
       />
 
+      {editingTemplate && (
+        <EditTemplateModal
+          open={showEditTemplateModal}
+          onOpenChange={setShowEditTemplateModal}
+          onSuccess={fetchIndicators}
+          templateId={editingTemplate.id}
+          initialData={{
+            name: editingTemplate.name,
+            description: editingTemplate.description,
+            formula: editingTemplate.formula,
+            importance: editingTemplate.importance,
+            segment: editingTemplate.segment,
+            complexity: editingTemplate.complexity,
+            icon_name: editingTemplate.icon_name || "",
+            required_data: editingTemplate.required_data || [],
+          }}
+        />
+      )}
+
       <div className="container mx-auto px-4 py-8">
         {/* Store Header */}
         <div className="mb-8 flex items-center justify-between">
@@ -490,9 +512,26 @@ const Store = () => {
                               </Badge>
                             </div>
                           </div>
-                          <Badge className={`${getComplexityColor(indicator.complexity)} border text-xs`}>
-                            {indicator.complexity}
-                          </Badge>
+                          <div className="flex items-center space-x-2">
+                            <Badge className={`${getComplexityColor(indicator.complexity)} border text-xs`}>
+                              {indicator.complexity}
+                            </Badge>
+                            {isAdmin && (
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTemplate(indicator);
+                                  setShowEditTemplateModal(true);
+                                }}
+                                title="Editar Template (Admin)"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </CardHeader>
 

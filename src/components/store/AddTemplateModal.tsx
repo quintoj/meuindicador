@@ -79,14 +79,45 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
         });
 
       if (error) {
+        // Log detalhado do erro
+        console.error('Erro detalhado ao criar template:', error.message || error);
+        console.error('Código do erro:', error.code);
+        console.error('Detalhes completos:', error);
+
+        // Erro de nome duplicado
         if (error.code === '23505') {
           toast({
             variant: "destructive",
             title: "Nome duplicado",
             description: "Já existe um indicador com este nome.",
           });
+          setLoading(false);
           return;
         }
+
+        // Erro de permissão RLS (Row Level Security)
+        if (error.code === '42501' || error.message?.includes('permission denied') || error.message?.includes('RLS')) {
+          toast({
+            variant: "destructive",
+            title: "Permissão negada",
+            description: "Você não tem permissão de Admin para criar templates.",
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Erro de política (policy violation)
+        if (error.code === 'PGRST301' || error.message?.includes('policy')) {
+          toast({
+            variant: "destructive",
+            title: "Sem permissão de Admin",
+            description: "Apenas administradores podem criar templates de indicadores.",
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Qualquer outro erro
         throw error;
       }
 
@@ -99,12 +130,26 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
       onOpenChange(false);
       onSuccess();
     } catch (err: any) {
-      console.error('Erro ao criar template:', err);
-      toast({
-        variant: "destructive",
-        title: "Erro ao criar",
-        description: err.message || "Não foi possível criar o template.",
-      });
+      // Log detalhado para debugging
+      console.error('Erro detalhado:', err.message || err);
+      console.error('Stack trace:', err.stack);
+      console.error('Objeto completo:', err);
+
+      // Verificar se é erro de permissão que não foi capturado antes
+      const errorMessage = err.message || '';
+      if (errorMessage.includes('permission') || errorMessage.includes('RLS') || errorMessage.includes('policy')) {
+        toast({
+          variant: "destructive",
+          title: "Sem permissão de Admin",
+          description: "Você não tem permissão de Admin para criar templates.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Erro ao criar",
+          description: err.message || "Não foi possível criar o template. Verifique o console para mais detalhes.",
+        });
+      }
     } finally {
       setLoading(false);
     }

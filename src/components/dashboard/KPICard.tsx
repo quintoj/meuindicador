@@ -1,8 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { LucideIcon, TrendingUp, TrendingDown, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { LucideIcon, TrendingUp, TrendingDown, Target, MoreVertical, BarChart3, Edit, Trash2 } from "lucide-react";
 import { useState } from "react";
 import EditKPIModal from "./EditKPIModal";
+import EditIndicatorModal from "./EditIndicatorModal";
 
 interface KPI {
   id: string;
@@ -20,7 +29,8 @@ interface KPICardProps {
 }
 
 const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const formatValue = (value: number, format: string) => {
     switch (format) {
@@ -85,11 +95,10 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
     }
   };
 
-  const handleCardClick = () => {
-    setIsModalOpen(true);
-  };
+  // Removido: card não deve ser clicável
+  // Apenas o menu de 3 pontos deve funcionar
 
-  const handleSave = () => {
+  const handleUpdate = () => {
     if (onUpdate) {
       onUpdate();
     }
@@ -98,8 +107,7 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
   return (
     <>
       <Card 
-        className="bg-gradient-card border-0 shadow-custom-md hover:shadow-custom-lg transition-all duration-300 cursor-pointer"
-        onClick={handleCardClick}
+        className="bg-gradient-card border-0 shadow-custom-md hover:shadow-custom-lg transition-all duration-300"
       >
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -112,6 +120,51 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
                 <Badge variant="secondary" className="text-xs mt-1">{kpi.segment}</Badge>
               </div>
             </div>
+            
+            {/* Menu de Opções */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild data-dropdown-trigger>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDataModalOpen(true);
+                  }}
+                >
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Lançar Dados
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditModalOpen(true);
+                  }}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar Indicador
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditModalOpen(true);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Remover
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardHeader>
 
@@ -174,11 +227,20 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
       </CardContent>
     </Card>
 
+    {/* Modal de Lançamento de Dados */}
     <EditKPIModal
-      open={isModalOpen}
-      onOpenChange={setIsModalOpen}
+      open={isDataModalOpen}
+      onOpenChange={setIsDataModalOpen}
       kpi={kpi}
-      onSave={handleSave}
+      onSave={handleUpdate}
+    />
+
+    {/* Modal de Edição do Indicador */}
+    <EditIndicatorModal
+      open={isEditModalOpen}
+      onOpenChange={setIsEditModalOpen}
+      kpi={kpi}
+      onUpdate={handleUpdate}
     />
     </>
   );

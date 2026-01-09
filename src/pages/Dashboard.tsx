@@ -161,8 +161,8 @@ const Dashboard = () => {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        console.log('Usuário não autenticado, usando dados estáticos');
-        setKpis(staticKPIs);
+        console.log('Usuário não autenticado');
+        setKpis([]);
         return;
       }
 
@@ -175,8 +175,7 @@ const Dashboard = () => {
 
       if (error) {
         console.error('Erro ao buscar indicadores do usuário:', error);
-        // Usar dados estáticos como fallback em caso de erro
-        setKpis(staticKPIs);
+        setKpis([]);
         return;
       }
 
@@ -193,13 +192,12 @@ const Dashboard = () => {
         }));
         setKpis(mappedKPIs);
       } else {
-        // Nenhum indicador encontrado, usar dados estáticos como fallback
-        setKpis(staticKPIs);
+        // Nenhum indicador encontrado - dashboard vazio
+        setKpis([]);
       }
     } catch (err) {
       console.error('Erro inesperado ao buscar indicadores:', err);
-      // Usar dados estáticos como fallback em caso de erro
-      setKpis(staticKPIs);
+      setKpis([]);
     } finally {
       setLoading(false);
     }
@@ -336,10 +334,22 @@ const Dashboard = () => {
                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                       <BarChart3 className="w-8 h-8 text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum indicador encontrado</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                      {searchTerm ? 'Nenhum indicador encontrado' : 'Bem-vindo ao Meu Gestor!'}
+                    </h3>
                     <p className="text-muted-foreground mb-4">
-                      {searchTerm ? 'Tente ajustar sua busca.' : 'Adicione indicadores da loja para começar.'}
+                      {searchTerm 
+                        ? 'Tente ajustar sua busca.' 
+                        : 'Você ainda não adicionou nenhum indicador. Comece visitando a Loja de Indicadores!'}
                     </p>
+                    {!searchTerm && (
+                      <Link to="/store">
+                        <Button className="bg-gradient-primary text-white hover:opacity-90 mt-2">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Ir para a Loja
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 )}
               </>

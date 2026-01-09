@@ -2,19 +2,17 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, ArrowLeft, Settings, Plus, LogOut } from "lucide-react";
+import { BarChart3, ArrowLeft, Settings, Plus, LogOut, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface HeaderProps {
   showBackButton?: boolean;
-  showAddButton?: boolean;
   showSettings?: boolean;
   title?: string;
 }
 
 const Header = ({ 
   showBackButton = false, 
-  showAddButton = false,
   showSettings = false,
   title 
 }: HeaderProps) => {
@@ -46,11 +44,18 @@ const Header = ({
           console.error('Erro ao buscar perfil:', error);
         }
 
-        // Usar o nome do perfil ou business_name ou email como fallback
+        // Prioridade de exibição do nome:
+        // 1. full_name da tabela user_profiles
+        // 2. business_name da tabela user_profiles
+        // 3. full_name do metadata do usuário (cadastro)
+        // 4. email do usuário
+        // 5. "Usuário" como último fallback
         if (profile?.full_name) {
           setUserName(profile.full_name);
         } else if (profile?.business_name) {
           setUserName(profile.business_name);
+        } else if (user.user_metadata?.full_name) {
+          setUserName(user.user_metadata.full_name);
         } else if (user.email) {
           setUserName(user.email);
         } else {
@@ -58,9 +63,11 @@ const Header = ({
         }
       } catch (err) {
         console.error('Erro inesperado ao buscar perfil:', err);
-        // Fallback para email se disponível
+        // Fallback para metadata e email se disponível
         const { data: { user } } = await supabase.auth.getUser();
-        if (user?.email) {
+        if (user?.user_metadata?.full_name) {
+          setUserName(user.user_metadata.full_name);
+        } else if (user?.email) {
           setUserName(user.email);
         } else {
           setUserName("Usuário");
@@ -102,21 +109,8 @@ const Header = ({
               {title}
             </Badge>
           )}
-          {!loading && userName && (
-            <Badge variant="secondary" className="ml-2">
-              {userName}
-            </Badge>
-          )}
         </div>
-        <div className="flex items-center space-x-4">
-          {showAddButton && (
-            <Link to="/store">
-              <Button variant="outline" className="flex items-center space-x-2">
-                <Plus className="w-4 h-4" />
-                <span>Adicionar KPI</span>
-              </Button>
-            </Link>
-          )}
+        <div className="flex items-center space-x-3">
           {showSettings && (
             <Link to="/settings">
               <Button variant="outline" size="icon" title="Configurações">
@@ -133,6 +127,12 @@ const Header = ({
             <Link to="/dashboard">
               <Button variant="outline">Voltar ao Dashboard</Button>
             </Link>
+          )}
+          {!loading && userName && (
+            <div className="flex items-center px-3 py-1.5 bg-gradient-primary/10 border border-primary/20 rounded-md">
+              <User className="w-4 h-4 text-primary mr-2" />
+              <span className="text-sm font-medium text-foreground">Olá, {userName}</span>
+            </div>
           )}
           <Button variant="outline" size="icon" onClick={handleLogout} title="Sair">
             <LogOut className="w-4 h-4" />
