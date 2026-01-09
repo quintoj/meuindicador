@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
+import AddTemplateModal from "@/components/store/AddTemplateModal";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface Indicator {
@@ -57,12 +58,17 @@ const getIcon = (iconName: string | null) => {
   return iconMap[iconName] || Building;
 };
 
+// Email do admin - altere para o seu email
+const ADMIN_EMAIL = "admin@meugestor.com";
+
 const Store = () => {
   const [selectedSegment, setSelectedSegment] = useState("Todos");
   const [searchTerm, setSearchTerm] = useState("");
   const [indicators, setIndicators] = useState<Indicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingIndicator, setAddingIndicator] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -175,15 +181,29 @@ const Store = () => {
     }
   ];
 
+  // Verificar se é admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email === ADMIN_EMAIL) {
+        setIsAdmin(true);
+      }
+    };
+    checkAdmin();
+  }, []);
+
   // Buscar indicadores do Supabase
   useEffect(() => {
-    const fetchIndicators = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('indicator_templates')
-          .select('*')
-          .order('name');
+    fetchIndicators();
+  }, []);
+
+  const fetchIndicators = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('indicator_templates')
+        .select('*')
+        .order('name');
 
         if (error) {
           console.error('Erro ao buscar indicadores:', error);
@@ -226,17 +246,14 @@ const Store = () => {
           // Tabela vazia, usar dados estáticos como fallback
           setIndicators(staticIndicators);
         }
-      } catch (err) {
-        console.error('Erro inesperado ao buscar indicadores:', err);
-        // Usar dados estáticos como fallback em caso de erro
-        setIndicators(staticIndicators);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchIndicators();
-  }, []);
+    } catch (err) {
+      console.error('Erro inesperado ao buscar indicadores:', err);
+      // Usar dados estáticos como fallback em caso de erro
+      setIndicators(staticIndicators);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calcular contagem de indicadores por segmento
   const getSegmentCount = (segmentId: string) => {
@@ -378,12 +395,29 @@ const Store = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <Header showBackButton={true} />
+      
+      <AddTemplateModal
+        open={showAddTemplateModal}
+        onOpenChange={setShowAddTemplateModal}
+        onSuccess={fetchIndicators}
+      />
 
       <div className="container mx-auto px-4 py-8">
         {/* Store Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Loja de Indicadores</h1>
-          <p className="text-muted-foreground">Escolha os KPIs perfeitos para o seu segmento e comece a monitorar agora mesmo</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Loja de Indicadores</h1>
+            <p className="text-muted-foreground">Escolha os KPIs perfeitos para o seu segmento e comece a monitorar agora mesmo</p>
+          </div>
+          {isAdmin && (
+            <Button
+              onClick={() => setShowAddTemplateModal(true)}
+              className="bg-gradient-primary text-white hover:opacity-90"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Template
+            </Button>
+          )}
         </div>
 
         {/* Search */}
@@ -427,105 +461,103 @@ const Store = () => {
                 <h3 className="text-lg font-semibold text-foreground mb-2">Carregando indicadores...</h3>
                 <p className="text-muted-foreground">Buscando dados do banco de dados</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredIndicators.map((indicator) => {
-                const Icon = indicator.icon;
-                return (
-                  <Card key={indicator.id} className="bg-gradient-card border-0 shadow-custom-md hover:shadow-custom-lg transition-all duration-300 group">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
-                            <Icon className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                              {indicator.name}
-                            </CardTitle>
-                            <Badge variant="secondary" className="mt-1">
-                              {indicator.segment}
-                            </Badge>
-                          </div>
-                        </div>
-                        <Badge className={`${getComplexityColor(indicator.complexity)} border text-xs`}>
-                          {indicator.complexity}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {indicator.description}
-                      </p>
-
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Calculator className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium text-foreground">Fórmula</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                            {indicator.formula}
-                          </p>
-                        </div>
-
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Info className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium text-foreground">Por que é importante?</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {indicator.importance}
-                          </p>
-                        </div>
-
-                        <div>
-                          <div className="flex items-center space-x-2 mb-2">
-                            <ShoppingCart className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium text-foreground">Dados necessários</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {indicator.required_data.map((data, index) => (
-                              <Badge key={index} variant="outline" className="text-xs">
-                                {data}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <Button 
-                        className="w-full bg-gradient-primary text-white hover:opacity-90 mt-4"
-                        onClick={() => handleAddToDashboard(indicator)}
-                        disabled={addingIndicator === indicator.id}
-                      >
-                        {addingIndicator === indicator.id ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Adicionando...
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Adicionar ao Dashboard
-                          </>
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-              </div>
-            )}
-
-            {!loading && filteredIndicators.length === 0 && (
+            ) : filteredIndicators.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                   <Search className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum indicador encontrado</h3>
                 <p className="text-muted-foreground">Tente ajustar sua busca ou escolher outro segmento.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredIndicators.map((indicator) => {
+                  const Icon = indicator.icon;
+                  return (
+                    <Card key={indicator.id} className="bg-gradient-card border-0 shadow-custom-md hover:shadow-custom-lg transition-all duration-300 group">
+                      <CardHeader className="pb-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+                              <Icon className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                                {indicator.name}
+                              </CardTitle>
+                              <Badge variant="secondary" className="mt-1">
+                                {indicator.segment}
+                              </Badge>
+                            </div>
+                          </div>
+                          <Badge className={`${getComplexityColor(indicator.complexity)} border text-xs`}>
+                            {indicator.complexity}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="space-y-4">
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {indicator.description}
+                        </p>
+
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center space-x-2 mb-1">
+                              <Calculator className="w-4 h-4 text-primary" />
+                              <span className="text-sm font-medium text-foreground">Fórmula</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                              {indicator.formula}
+                            </p>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center space-x-2 mb-1">
+                              <Info className="w-4 h-4 text-primary" />
+                              <span className="text-sm font-medium text-foreground">Por que é importante?</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {indicator.importance}
+                            </p>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <ShoppingCart className="w-4 h-4 text-primary" />
+                              <span className="text-sm font-medium text-foreground">Dados necessários</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {indicator.required_data.map((data, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {data}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button 
+                          className="w-full bg-gradient-primary text-white hover:opacity-90 mt-4"
+                          onClick={() => handleAddToDashboard(indicator)}
+                          disabled={addingIndicator === indicator.id}
+                        >
+                          {addingIndicator === indicator.id ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Adicionando...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-2" />
+                              Adicionar ao Dashboard
+                            </>
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

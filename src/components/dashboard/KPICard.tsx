@@ -1,11 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { LucideIcon, Edit, TrendingUp, TrendingDown, Target } from "lucide-react";
+import { LucideIcon, TrendingUp, TrendingDown, Target } from "lucide-react";
 import { useState } from "react";
+import EditKPIModal from "./EditKPIModal";
 
 interface KPI {
   id: string;
@@ -19,11 +16,11 @@ interface KPI {
 
 interface KPICardProps {
   kpi: KPI;
+  onUpdate?: () => void;
 }
 
-const KPICard = ({ kpi }: KPICardProps) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [newTarget, setNewTarget] = useState(kpi.target.toString());
+const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const formatValue = (value: number, format: string) => {
     switch (format) {
@@ -88,56 +85,35 @@ const KPICard = ({ kpi }: KPICardProps) => {
     }
   };
 
+  const handleCardClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleSave = () => {
+    if (onUpdate) {
+      onUpdate();
+    }
+  };
+
   return (
-    <Card className="bg-gradient-card border-0 shadow-custom-md hover:shadow-custom-lg transition-all duration-300">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`w-10 h-10 ${getGradientClass()} rounded-lg flex items-center justify-center`}>
-              <Icon className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-sm font-medium text-foreground">{kpi.name}</CardTitle>
-              <Badge variant="secondary" className="text-xs mt-1">{kpi.segment}</Badge>
+    <>
+      <Card 
+        className="bg-gradient-card border-0 shadow-custom-md hover:shadow-custom-lg transition-all duration-300 cursor-pointer"
+        onClick={handleCardClick}
+      >
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className={`w-10 h-10 ${getGradientClass()} rounded-lg flex items-center justify-center`}>
+                <Icon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-medium text-foreground">{kpi.name}</CardTitle>
+                <Badge variant="secondary" className="text-xs mt-1">{kpi.segment}</Badge>
+              </div>
             </div>
           </div>
-          <Dialog open={isEditing} onOpenChange={setIsEditing}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <Edit className="w-4 h-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Editar Meta - {kpi.name}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="target">Nova Meta</Label>
-                  <Input
-                    id="target"
-                    value={newTarget}
-                    onChange={(e) => setNewTarget(e.target.value)}
-                    type="number"
-                    step="0.01"
-                  />
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setIsEditing(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={() => {
-                    // Aqui você salvaria a nova meta
-                    setIsEditing(false);
-                  }}>
-                    Salvar
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
+        </CardHeader>
 
       <CardContent className="pt-0">
         <div className="space-y-4">
@@ -197,6 +173,14 @@ const KPICard = ({ kpi }: KPICardProps) => {
         </div>
       </CardContent>
     </Card>
+
+    <EditKPIModal
+      open={isModalOpen}
+      onOpenChange={setIsModalOpen}
+      kpi={kpi}
+      onSave={handleSave}
+    />
+    </>
   );
 };
 

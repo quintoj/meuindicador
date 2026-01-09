@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,62 +152,63 @@ const Dashboard = () => {
     }
   ];
 
-  // Buscar indicadores do usuário do Supabase
-  useEffect(() => {
-    const fetchUserIndicators = async () => {
-      try {
-        setLoading(true);
-        
-        // Obter o usuário atual
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          console.log('Usuário não autenticado, usando dados estáticos');
-          setKpis(staticKPIs);
-          return;
-        }
+  // Função para buscar indicadores do usuário
+  const fetchUserIndicators = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Obter o usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.log('Usuário não autenticado, usando dados estáticos');
+        setKpis(staticKPIs);
+        return;
+      }
 
-        const { data, error } = await (supabase as any)
-          .from('user_indicators')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .order('position', { ascending: true, nullsFirst: false });
+      const { data, error } = await (supabase as any)
+        .from('user_indicators')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('position', { ascending: true, nullsFirst: false });
 
-        if (error) {
-          console.error('Erro ao buscar indicadores do usuário:', error);
-          // Usar dados estáticos como fallback em caso de erro
-          setKpis(staticKPIs);
-          return;
-        }
-
-        if (data && data.length > 0) {
-          // Mapear dados do Supabase para o formato esperado
-          const mappedKPIs: KPI[] = data.map((item: any) => ({
-            id: String(item.id),
-            name: item.name || '',
-            value: Number(item.current_value) || 0,
-            target: Number(item.target_value) || 0,
-            format: item.format || 'number',
-            icon: getIcon(item.icon_name),
-            segment: item.segment || 'Geral'
-          }));
-          setKpis(mappedKPIs);
-        } else {
-          // Nenhum indicador encontrado, usar dados estáticos como fallback
-          setKpis(staticKPIs);
-        }
-      } catch (err) {
-        console.error('Erro inesperado ao buscar indicadores:', err);
+      if (error) {
+        console.error('Erro ao buscar indicadores do usuário:', error);
         // Usar dados estáticos como fallback em caso de erro
         setKpis(staticKPIs);
-      } finally {
-        setLoading(false);
+        return;
       }
-    };
 
-    fetchUserIndicators();
+      if (data && data.length > 0) {
+        // Mapear dados do Supabase para o formato esperado
+        const mappedKPIs: KPI[] = data.map((item: any) => ({
+          id: String(item.id),
+          name: item.name || '',
+          value: Number(item.current_value) || 0,
+          target: Number(item.target_value) || 0,
+          format: item.format || 'number',
+          icon: getIcon(item.icon_name),
+          segment: item.segment || 'Geral'
+        }));
+        setKpis(mappedKPIs);
+      } else {
+        // Nenhum indicador encontrado, usar dados estáticos como fallback
+        setKpis(staticKPIs);
+      }
+    } catch (err) {
+      console.error('Erro inesperado ao buscar indicadores:', err);
+      // Usar dados estáticos como fallback em caso de erro
+      setKpis(staticKPIs);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Buscar indicadores do usuário do Supabase
+  useEffect(() => {
+    fetchUserIndicators();
+  }, [fetchUserIndicators]);
 
   // Filtrar KPIs baseado na busca
   const filteredKPIs = kpis.filter(kpi =>
@@ -327,7 +328,7 @@ const Dashboard = () => {
                 {filteredKPIs.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {filteredKPIs.map((kpi) => (
-                      <KPICard key={kpi.id} kpi={kpi} />
+                      <KPICard key={kpi.id} kpi={kpi} onUpdate={fetchUserIndicators} />
                     ))}
                   </div>
                 ) : (

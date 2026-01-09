@@ -247,6 +247,50 @@ const { data, error } = await supabase
 
 ---
 
+## 6. Atualização de Indicadores (Atualizar valor)
+
+### Data: Implementação do modal de edição
+### Arquivos Criados/Atualizados:
+- `src/components/dashboard/EditKPIModal.tsx` (NOVO)
+- `src/components/dashboard/KPICard.tsx` (ATUALIZADO)
+- `src/pages/Dashboard.tsx` (ATUALIZADO)
+
+### Funcionalidades:
+- Cards de KPI clicáveis (`cursor-pointer`)
+- Modal (Dialog shadcn/ui) abre ao clicar no card
+- Seção “Como calcular” exibindo:
+  - Fórmula do indicador (busca no `indicator_templates`)
+  - `required_data` mostrado como badges
+  - Estado de loading durante a busca
+- Inputs:
+  - Valor Atual (grande, numérico)
+  - Meta/Target (numérico)
+  - Data (padrão: hoje)
+- Persistência:
+  - UPDATE em `user_indicators` (`current_value`, `target_value`)
+  - INSERT em `indicator_history` (valor e data)
+- Feedback:
+  - Toast de sucesso/erro (`useToast`)
+  - Fecha modal e atualiza a lista após salvar
+- Atualização automática:
+  - `Dashboard` passa `onUpdate` para o `KPICard`, que refaz a busca após salvar
+
+### Fluxo:
+1. Clique no card abre modal.
+2. Busca fórmula e dados necessários do template via `user_indicators.indicator_template_id`.
+3. Usuário edita Valor Atual, Meta e Data.
+4. Salvar:
+   - UPDATE `user_indicators`
+   - INSERT `indicator_history`
+   - Toast de sucesso
+   - Fecha modal e recarrega KPIs
+
+### Observações:
+- Tolerância a tipos no Supabase com `as any` nas queries específicas.
+- Fallbacks para dados (JSONB de `required_data`).
+
+---
+
 ## 📊 Resumo das Tabelas do Banco
 
 | Tabela | Propósito | Principais Campos |
@@ -297,6 +341,90 @@ const { data, error } = await supabase
 
 ---
 
+## 7. Ajustes Estruturais e Admin Dashboard
+
+### 7.1. Página de Configurações
+
+**Arquivo:** `src/pages/Settings.tsx`
+
+Criada nova página de configurações com:
+- **Informações da Conta**: Email (somente leitura), nome completo
+- **Informações do Negócio**: Nome do negócio, segmento
+- **API Key**: Placeholder para funcionalidade futura
+- **Persistência**: Usa `upsert` na tabela `user_profiles`
+- **Feedback**: Toast de sucesso/erro
+- **Layout**: Cards organizados com Header reutilizável
+
+### 7.2. Correção de Rotas
+
+**Problema identificado:**
+- Menu "API Key" e "Loja de Indicadores" levavam para o mesmo lugar
+
+**Solução implementada:**
+
+1. **App.tsx**: Adicionada rota `/settings`
+2. **Header.tsx**: Botão de settings agora navega corretamente para `/settings`
+3. **Separação clara**: `/store` para Loja de Indicadores, `/settings` para Configurações
+
+### 7.3. Sistema de Admin
+
+**Constante de configuração em `Store.tsx`:**
+```typescript
+const ADMIN_EMAIL = "admin@meugestor.com";
+```
+
+**Verificação de admin:**
+- Ao carregar a página Store, verifica se o email do usuário corresponde ao `ADMIN_EMAIL`
+- Estado `isAdmin` controla a exibição de funcionalidades administrativas
+
+**Funcionalidades Admin:**
+
+1. **Botão "Novo Template"**: Visível apenas para admin no header da Store
+2. **Modal de Criação**: `src/components/store/AddTemplateModal.tsx`
+
+### 7.4. Modal de Adicionar Template
+
+**Arquivo:** `src/components/store/AddTemplateModal.tsx`
+
+**Campos do formulário:**
+- **Nome do Indicador** * (obrigatório)
+- **Descrição** * (textarea)
+- **Fórmula** * (textarea)
+- **Por que é importante?** * (textarea)
+- **Segmento** * (select: Geral, Academia, Restaurante, Contabilidade, PetShop)
+- **Complexidade** * (select: Fácil, Intermediário, Avançado)
+- **Nome do Ícone** (input text - ex: DollarSign, Users)
+- **Dados Necessários** (lista dinâmica com badges removíveis)
+
+**Funcionalidades:**
+- Validação de campos obrigatórios
+- Tratamento de nome duplicado (erro 23505)
+- Conversão de `required_data` para JSON antes de salvar
+- Callback `onSuccess` para recarregar lista de templates
+- Reset do formulário após sucesso
+- Estados de loading durante salvamento
+
+**Fluxo completo:**
+1. Admin clica em "Novo Template" na Store
+2. Modal abre com formulário vazio
+3. Admin preenche os campos
+4. Ao salvar:
+   - Valida campos obrigatórios
+   - Insere na tabela `indicator_templates`
+   - Mostra toast de sucesso
+   - Fecha modal e recarrega lista
+   - Lista de indicadores atualiza automaticamente
+
+### 7.5. Benefícios das Alterações
+
+- **Separação de responsabilidades**: Settings agora tem sua própria página
+- **Rotas corretas**: Cada menu leva para a página correspondente
+- **Sistema de permissões**: Base para funcionalidades administrativas
+- **Gestão de conteúdo**: Admin pode popular a loja sem acessar o banco direto
+- **Escalabilidade**: Fácil adicionar mais emails de admin ou implementar roles
+
+---
+
 ## 🔧 Tecnologias Utilizadas
 
 - **Frontend:** React + TypeScript
@@ -316,9 +444,11 @@ const { data, error } = await supabase
 - **v1.2** - Atualização de tipos TypeScript
 - **v1.3** - Refatoração do Dashboard.tsx
 - **v1.4** - Implementação do sistema de autenticação
+- **v1.5** - Modal de atualização de indicadores
+- **v1.6** - Página de configurações e sistema de admin
 
 ---
 
-**Última atualização:** Data da última modificação
+**Última atualização:** Janeiro 2026
 **Mantido por:** Equipe de Desenvolvimento
 

@@ -118,9 +118,11 @@ const Header = ({
             </Link>
           )}
           {showSettings && (
-            <Button variant="outline" size="icon">
-              <Settings className="w-4 h-4" />
-            </Button>
+            <Link to="/settings">
+              <Button variant="outline" size="icon" title="Configurações">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </Link>
           )}
           {!showBackButton && (
             <Link to="/store">
