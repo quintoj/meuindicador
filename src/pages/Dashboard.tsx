@@ -29,8 +29,10 @@ import {
 import { Link } from "react-router-dom";
 import KPICard from "@/components/dashboard/KPICard";
 import AIChat from "@/components/ai/AIChat";
+import UserHelpGuide from "@/components/dashboard/UserHelpGuide";
 import Header from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
+import { getIndicatorStatus, type IndicatorDirection } from "@/utils/indicators";
 import type { LucideIcon } from "lucide-react";
 
 interface KPI {
@@ -41,6 +43,16 @@ interface KPI {
   format: "currency" | "percentage" | "number";
   icon: LucideIcon;
   segment: string;
+  template?: {
+    id: string;
+    name: string;
+    formula: string;
+    required_data: any;
+    input_fields: any;
+    calc_method: string;
+    direction: string;
+    unit_type: string;
+  };
 }
 
 // Mapeamento robusto de nomes de ícones para componentes
@@ -166,9 +178,14 @@ const Dashboard = () => {
         return;
       }
 
+      // 🔧 FONTE DA VERDADE: Buscar TODOS os campos do template
+      // Para garantir que mudanças no template sejam refletidas imediatamente
       const { data, error } = await (supabase as any)
         .from('user_indicators')
-        .select('*')
+        .select(`
+          *,
+          template:indicator_templates(*)
+        `)
         .eq('user_id', user.id)
         .eq('is_active', true)
         .order('position', { ascending: true, nullsFirst: false });
@@ -180,16 +197,33 @@ const Dashboard = () => {
       }
 
       if (data && data.length > 0) {
+        console.log('Dados buscados do banco (com template):', data);
+        
         // Mapear dados do Supabase para o formato esperado
-        const mappedKPIs: KPI[] = data.map((item: any) => ({
+        const mappedKPIs: KPI[] = data.map((item: any) => {
+          // 🔧 Meta (Target): se o usuário não definiu (NULL), usar a meta padrão do template (admin)
+          const userTargetRaw = item.target_value;
+          const templateDefaultTargetRaw = item.template?.default_critical_threshold;
+          const resolvedTarget =
+            userTargetRaw !== null && userTargetRaw !== undefined
+              ? Number(userTargetRaw)
+              : (templateDefaultTargetRaw !== null && templateDefaultTargetRaw !== undefined
+                  ? Number(templateDefaultTargetRaw)
+                  : 0);
+
+          return {
           id: String(item.id),
           name: item.name || '',
           value: Number(item.current_value) || 0,
-          target: Number(item.target_value) || 0,
+          target: resolvedTarget,
           format: item.format || 'number',
           icon: getIcon(item.icon_name),
-          segment: item.segment || 'Geral'
-        }));
+          segment: item.segment || 'Geral',
+          template: item.template || undefined // 👈 Incluir template no KPI
+          };
+        });
+        
+        console.log('KPIs mapeados (com template):', mappedKPIs);
         setKpis(mappedKPIs);
       } else {
         // Nenhum indicador encontrado - dashboard vazio
@@ -214,19 +248,26 @@ const Dashboard = () => {
     kpi.segment.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Calcular estatísticas
-  const stats = {
+  // Calcular estatísticas usando a lógica centralizada
+  // 🔧 CORRIGIDO: Agora respeita HIGHER_BETTER vs LOWER_BETTER
+  // 🔧 v1.27: Agora usa thresholds do template
+  const stats = kpis.reduce((acc, kpi) => {
+    const direction = (kpi.template?.direction as IndicatorDirection) || 'HIGHER_BETTER';
+    const warningThreshold = kpi.template?.default_warning_threshold;
+    const criticalThreshold = kpi.template?.default_critical_threshold;
+    const status = getIndicatorStatus(kpi.value, kpi.target, direction, warningThreshold, criticalThreshold);
+    
+    if (status === 'success') acc.success++;
+    else if (status === 'warning') acc.warning++;
+    else if (status === 'danger') acc.danger++;
+    
+    return acc;
+  }, { 
     total: kpis.length,
-    aboveTarget: kpis.filter(kpi => kpi.value >= kpi.target).length,
-    nearTarget: kpis.filter(kpi => {
-      const percentage = (kpi.value / kpi.target) * 100;
-      return percentage >= 90 && percentage < 100;
-    }).length,
-    belowTarget: kpis.filter(kpi => {
-      const percentage = (kpi.value / kpi.target) * 100;
-      return percentage < 90;
-    }).length,
-  };
+    success: 0,  // Verde (Acima/Dentro da Meta)
+    warning: 0,  // Amarelo (Próximo da Meta)
+    danger: 0    // Vermelho (Abaixo/Fora da Meta)
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -257,8 +298,8 @@ const Dashboard = () => {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm opacity-90">Acima da Meta</p>
-                    <p className="text-2xl font-bold">{stats.aboveTarget}</p>
+                    <p className="text-sm opacity-90">Acima/Dentro da Meta</p>
+                    <p className="text-2xl font-bold">{stats.success}</p>
                   </div>
                   <Target className="w-8 h-8 opacity-80" />
                 </div>
@@ -269,7 +310,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm opacity-90">Próximo da Meta</p>
-                    <p className="text-2xl font-bold">{stats.nearTarget}</p>
+                    <p className="text-2xl font-bold">{stats.warning}</p>
                   </div>
                   <Target className="w-8 h-8 opacity-80" />
                 </div>
@@ -279,8 +320,8 @@ const Dashboard = () => {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm opacity-90">Abaixo da Meta</p>
-                    <p className="text-2xl font-bold">{stats.belowTarget}</p>
+                    <p className="text-sm opacity-90">Abaixo/Fora da Meta</p>
+                    <p className="text-2xl font-bold">{stats.danger}</p>
                   </div>
                   <Target className="w-8 h-8 opacity-80" />
                 </div>
@@ -306,6 +347,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold text-foreground">Seus Indicadores</h2>
               <div className="flex items-center space-x-2">
+                <UserHelpGuide />
                 <Input 
                   placeholder="Buscar indicador..." 
                   className="w-64"
@@ -335,7 +377,7 @@ const Dashboard = () => {
                       <BarChart3 className="w-8 h-8 text-muted-foreground" />
                     </div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">
-                      {searchTerm ? 'Nenhum indicador encontrado' : 'Bem-vindo ao Meu Gestor!'}
+                      {searchTerm ? 'Nenhum indicador encontrado' : 'Bem-vindo ao Meu Indicador!'}
                     </h3>
                     <p className="text-muted-foreground mb-4">
                       {searchTerm 

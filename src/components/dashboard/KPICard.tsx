@@ -12,6 +12,7 @@ import { LucideIcon, TrendingUp, TrendingDown, Target, MoreVertical, BarChart3, 
 import { useState } from "react";
 import EditKPIModal from "./EditKPIModal";
 import EditIndicatorModal from "./EditIndicatorModal";
+import { calculateIndicatorStatus, getDifferenceText, type IndicatorDirection } from "@/utils/indicators";
 
 interface KPI {
   id: string;
@@ -21,6 +22,18 @@ interface KPI {
   format: "currency" | "percentage" | "number";
   icon: LucideIcon;
   segment: string;
+  template?: {
+    id: string;
+    name: string;
+    formula: string;
+    required_data: any;
+    input_fields: any;
+    calc_method: string;
+    direction: string;
+    unit_type: string;
+    default_warning_threshold?: number | null;
+    default_critical_threshold?: number | null;
+  };
 }
 
 interface KPICardProps {
@@ -46,44 +59,23 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
     }
   };
 
-  const getPerformancePercentage = () => {
-    return (kpi.value / kpi.target) * 100;
-  };
+  // 🔥 NOVA LÓGICA: Usa a direção do indicador
+  const direction = (kpi.template?.direction || 'HIGHER_BETTER') as IndicatorDirection;
+  
+  // 🔧 v1.27: Usa thresholds do template para cálculo de status
+  const warningThreshold = kpi.template?.default_warning_threshold;
+  const criticalThreshold = kpi.template?.default_critical_threshold;
+  
+  // Calcular status usando a função corrigida com thresholds do template
+  const status = calculateIndicatorStatus(kpi.value, kpi.target, direction, warningThreshold, criticalThreshold);
+  const difference = getDifferenceText(kpi.value, kpi.target, direction);
 
-  const getStatusColor = () => {
-    const percentage = getPerformancePercentage();
-    if (percentage >= 100) return "success";
-    if (percentage >= 90) return "warning";
-    return "danger";
-  };
-
-  const getStatusIcon = () => {
-    const percentage = getPerformancePercentage();
-    if (percentage >= 100) return TrendingUp;
-    return TrendingDown;
-  };
-
-  const getDifference = () => {
-    const diff = kpi.value - kpi.target;
-    const percentage = Math.abs((diff / kpi.target) * 100);
-    const isPositive = diff >= 0;
-    
-    return {
-      value: Math.abs(diff),
-      percentage: percentage.toFixed(1),
-      isPositive,
-      text: isPositive ? "acima da meta" : "abaixo da meta"
-    };
-  };
-
-  const statusColor = getStatusColor();
-  const StatusIcon = getStatusIcon();
+  // Ícone baseado no status (não mais na simples comparação)
+  const StatusIcon = status.isPositive ? TrendingUp : TrendingDown;
   const Icon = kpi.icon;
-  const difference = getDifference();
-  const performancePercentage = getPerformancePercentage();
 
   const getGradientClass = () => {
-    switch (statusColor) {
+    switch (status.color) {
       case "success":
         return "bg-gradient-success";
       case "warning":
@@ -187,14 +179,14 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
               <span className="text-muted-foreground">Performance</span>
               <div className="flex items-center space-x-1">
                 <StatusIcon className={`w-4 h-4 ${
-                  statusColor === 'success' ? 'text-success' : 
-                  statusColor === 'warning' ? 'text-warning' : 'text-danger'
+                  status.color === 'success' ? 'text-success' : 
+                  status.color === 'warning' ? 'text-warning' : 'text-danger'
                 }`} />
                 <span className={`font-semibold ${
-                  statusColor === 'success' ? 'text-success' : 
-                  statusColor === 'warning' ? 'text-warning' : 'text-danger'
+                  status.color === 'success' ? 'text-success' : 
+                  status.color === 'warning' ? 'text-warning' : 'text-danger'
                 }`}>
-                  {performancePercentage.toFixed(1)}%
+                  {status.percentage.toFixed(1)}%
                 </span>
               </div>
             </div>
@@ -203,21 +195,21 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
             <div className="w-full bg-muted rounded-full h-2">
               <div 
                 className={`h-2 rounded-full transition-all duration-500 ${
-                  statusColor === 'success' ? 'bg-success' : 
-                  statusColor === 'warning' ? 'bg-warning' : 'bg-danger'
+                  status.color === 'success' ? 'bg-success' : 
+                  status.color === 'warning' ? 'bg-warning' : 'bg-danger'
                 }`}
-                style={{ width: `${Math.min(performancePercentage, 100)}%` }}
+                style={{ width: `${Math.min(status.percentage, 100)}%` }}
               ></div>
             </div>
           </div>
 
           {/* Difference */}
           <div className={`text-sm p-3 rounded-lg ${
-            statusColor === 'success' ? 'bg-success/10 text-success' : 
-            statusColor === 'warning' ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'
+            status.color === 'success' ? 'bg-success/10 text-success' : 
+            status.color === 'warning' ? 'bg-warning/10 text-warning' : 'bg-danger/10 text-danger'
           }`}>
             <div className="font-semibold">
-              {formatValue(difference.value, kpi.format)} {difference.text}
+              {formatValue(difference.value, kpi.format)} {status.text}
             </div>
             <div className="text-xs opacity-80">
               {difference.percentage}% de diferença da meta

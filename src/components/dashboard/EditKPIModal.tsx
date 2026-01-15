@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calculator, Info, Loader2, Calendar as CalendarIcon, Sparkles, TrendingUp, HelpCircle } from "lucide-react";
+import { Calculator, Info, Loader2, Calendar as CalendarIcon, Sparkles, TrendingUp, HelpCircle, Target } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,6 +19,16 @@ interface KPI {
   format: "currency" | "percentage" | "number";
   icon: any;
   segment: string;
+  template?: {
+    id: string;
+    name: string;
+    formula: string;
+    required_data: any;
+    input_fields: any;
+    calc_method: string;
+    direction: string;
+    unit_type: string;
+  };
 }
 
 interface EditKPIModalProps {
@@ -50,6 +60,47 @@ const fieldHints: Record<string, string> = {
   "período": "Defina o período de análise (dia/semana/mês)",
 };
 
+// ============================================
+// FUNÇÕES AUXILIARES (FORA DO COMPONENTE)
+// ============================================
+
+// Converter nome do campo em label amigável
+const formatFieldLabel = (field: string): string => {
+  return field
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+};
+
+// Detectar se um campo é de texto (informativo)
+const isTextField = (field: string): boolean => {
+  const fieldLower = field.toLowerCase();
+  const textKeywords = ['status', 'nome', 'descricao', 'tipo', 'categoria', 'observacao', 'comentario', 'nota'];
+  return textKeywords.some(keyword => fieldLower === keyword || fieldLower.startsWith(keyword + '_'));
+};
+
+// Se não é campo de texto, é numérico
+const isNumericField = (field: string): boolean => {
+  return !isTextField(field);
+};
+
+// Obter hint contextual para um campo
+const getFieldHint = (field: string): string => {
+  const fieldLower = field.toLowerCase();
+  
+  for (const [key, hint] of Object.entries(fieldHints)) {
+    if (fieldLower.includes(key)) {
+      return hint;
+    }
+  }
+  
+  return "Insira o valor deste dado para o período selecionado";
+};
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
+
 const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) => {
   const [targetValue, setTargetValue] = useState(kpi.target.toString());
   const [recordedDate, setRecordedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -63,23 +114,182 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
   const [activeTab, setActiveTab] = useState("manual");
   const { toast } = useToast();
 
-  // Buscar dados do template quando o modal abrir
+  // ============================================
+  // DERIVED STATE com useMemo - DEVE VIR ANTES DE TUDO!
+  // ============================================
+  
+  const { numericFields, textFields, showDynamicInputs } = useMemo(() => {
+    console.log('🔍 ===== CALCULANDO CAMPOS (useMemo) =====');
+    const template = kpi.template;
+    
+    let dynamicFields: string[] = [];
+    
+    // Extrair campos do input_fields (JSONB)
+    if (template?.input_fields) {
+      try {
+        let inputFieldsJSON: any;
+        
+        if (typeof template.input_fields === 'string') {
+          inputFieldsJSON = JSON.parse(template.input_fields);
+        } else {
+          inputFieldsJSON = template.input_fields;
+        }
+        
+        const fixed = Array.isArray(inputFieldsJSON.fixed) ? inputFieldsJSON.fixed : [];
+        const daily = Array.isArray(inputFieldsJSON.daily) ? inputFieldsJSON.daily : [];
+        dynamicFields = [...fixed, ...daily];
+        
+        console.log('✅ Campos de input_fields:', dynamicFields);
+      } catch (err) {
+        console.error('❌ Erro ao processar input_fields:', err);
+      }
+    }
+    
+    // FALLBACK: required_data
+    if (dynamicFields.length === 0 && template?.required_data) {
+      try {
+        if (Array.isArray(template.required_data)) {
+          dynamicFields = template.required_data;
+        } else if (typeof template.required_data === 'string') {
+          const parsed = JSON.parse(template.required_data);
+          dynamicFields = Array.isArray(parsed) ? parsed : [];
+        }
+        console.log('⚠️ Usando fallback required_data:', dynamicFields);
+      } catch (err) {
+        console.error('❌ Erro ao processar required_data:', err);
+      }
+    }
+    
+    // Filtrar campos
+    const numeric = dynamicFields.filter(field => isNumericField(field));
+    const text = dynamicFields.filter(field => isTextField(field));
+    const showDynamic = numeric.length > 0;
+
+    console.log('✅ Resultado:', { numeric, text, showDynamic });
+    console.log('=============================');
+    
+    return {
+      numericFields: numeric,
+      textFields: text,
+      showDynamicInputs: showDynamic
+    };
+  }, [kpi.template]); // Só recalcula se o template mudar
+
+  // Carregar dados do template quando o modal abrir
   useEffect(() => {
-    if (open && kpi.id) {
-      fetchTemplateData();
+    if (open) {
+      console.log('🔍 Modal aberto com KPI:', kpi);
+      console.log('📊 Template Data:', kpi.template);
+      
+      // Se o template já veio do Dashboard, usar diretamente
+      if (kpi.template) {
+        loadTemplateFromKPI();
+      } else {
+        // Fallback: buscar template do banco
+        fetchTemplateData();
+      }
+      
       setActiveTab("manual");
       setQuickInput("");
     }
-  }, [open, kpi.id]);
+  }, [open, kpi]);
 
   // Resetar valores quando o modal abrir
   useEffect(() => {
     if (open) {
-      setTargetValue(kpi.target.toString());
+      // Preencher Meta automaticamente com o valor salvo
+      const targetVal = kpi.target || 0;
+      setTargetValue(targetVal.toString());
+      console.log('📊 Meta carregada:', targetVal);
+      
       setRecordedDate(new Date().toISOString().split('T')[0]);
-      setCalculatedResult(kpi.value);
+      setCalculatedResult(kpi.value || 0);
+      
+      // 🔄 CARREGAR últimos inputs salvos (se existirem)
+      loadLastInputs();
     }
   }, [open, kpi]);
+
+  const templateDefaultTarget =
+    (kpi.template?.default_critical_threshold !== null && kpi.template?.default_critical_threshold !== undefined)
+      ? Number(kpi.template.default_critical_threshold)
+      : null;
+
+  // Carregar últimos inputs salvos do banco
+  const loadLastInputs = async () => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('user_indicators')
+        .select('last_inputs')
+        .eq('id', kpi.id)
+        .single();
+
+      if (!error && data?.last_inputs) {
+        console.log('🔄 Carregando últimos inputs:', data.last_inputs);
+        setDynamicInputs(data.last_inputs);
+      } else {
+        console.log('ℹ️ Sem inputs salvos anteriormente');
+      }
+    } catch (err) {
+      console.error('Erro ao carregar last_inputs:', err);
+    }
+  };
+
+  // Carregar template a partir do KPI (que já veio do Dashboard)
+  const loadTemplateFromKPI = () => {
+    if (!kpi.template) return;
+    
+    const template = kpi.template;
+    console.log('✅ Usando template do KPI:', template);
+    
+    setFormula(template.formula || '');
+    
+    // PRIORIDADE 1: Usar input_fields (JSONB) se existir
+    let dataArray: string[] = [];
+    if (template.input_fields) {
+      try {
+        const inputFields = typeof template.input_fields === 'string' 
+          ? JSON.parse(template.input_fields) 
+          : template.input_fields;
+        
+        console.log('📝 input_fields encontrado:', inputFields);
+        
+        // Combinar campos fixed e daily
+        const fixedFields = inputFields.fixed || [];
+        const dailyFields = inputFields.daily || [];
+        dataArray = [...fixedFields, ...dailyFields];
+        
+        console.log('✅ Campos extraídos de input_fields:', dataArray);
+      } catch (err) {
+        console.error('❌ Erro ao processar input_fields:', err);
+      }
+    }
+    
+    // FALLBACK: Usar required_data se input_fields não existir
+    if (dataArray.length === 0 && template.required_data) {
+      console.log('⚠️ Usando fallback: required_data');
+      if (Array.isArray(template.required_data)) {
+        dataArray = template.required_data;
+      } else if (typeof template.required_data === 'string') {
+        try {
+          const parsed = JSON.parse(template.required_data);
+          dataArray = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          dataArray = [];
+        }
+      }
+    }
+    
+    console.log('🎯 Campos finais para renderizar:', dataArray);
+    setRequiredData(dataArray);
+    
+    // Inicializar inputs dinâmicos
+    const initialInputs: Record<string, string> = {};
+    dataArray.forEach(field => {
+      initialInputs[field] = '';
+    });
+    setDynamicInputs(initialInputs);
+  };
 
   const fetchTemplateData = async () => {
     try {
@@ -95,16 +305,38 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       if (userIndicator?.indicator_template_id) {
         const { data: template, error } = await (supabase as any)
           .from('indicator_templates')
-          .select('formula, required_data')
+          .select('formula, required_data, input_fields, calc_method')
           .eq('id', userIndicator.indicator_template_id)
           .single();
 
         if (!error && template) {
+          console.log('Template carregado:', template);
           setFormula(template.formula || '');
           
-          // Processar required_data (pode ser JSONB ou array)
+          // PRIORIDADE 1: Usar input_fields (JSONB) se existir
           let dataArray: string[] = [];
-          if (template.required_data) {
+          if (template.input_fields) {
+            try {
+              const inputFields = typeof template.input_fields === 'string' 
+                ? JSON.parse(template.input_fields) 
+                : template.input_fields;
+              
+              console.log('input_fields encontrado:', inputFields);
+              
+              // Combinar campos fixed e daily
+              const fixedFields = inputFields.fixed || [];
+              const dailyFields = inputFields.daily || [];
+              dataArray = [...fixedFields, ...dailyFields];
+              
+              console.log('Campos extraídos de input_fields:', dataArray);
+            } catch (err) {
+              console.error('Erro ao processar input_fields:', err);
+            }
+          }
+          
+          // FALLBACK: Usar required_data se input_fields não existir
+          if (dataArray.length === 0 && template.required_data) {
+            console.log('Usando fallback: required_data');
             if (Array.isArray(template.required_data)) {
               dataArray = template.required_data;
             } else if (typeof template.required_data === 'string') {
@@ -117,6 +349,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
             }
           }
           
+          console.log('Campos finais para renderizar:', dataArray);
           setRequiredData(dataArray);
           
           // Inicializar inputs dinâmicos
@@ -134,110 +367,78 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     }
   };
 
-  // Detectar se um campo é de texto (informativo)
-  const isTextField = (field: string): boolean => {
-    const fieldLower = field.toLowerCase();
-    const textKeywords = ['status', 'nome', 'descrição', 'descricao', 'tipo', 'categoria', 'observação', 'observacao', 'comentário', 'comentario'];
-    return textKeywords.some(keyword => fieldLower.includes(keyword));
-  };
+  // Funções auxiliares agora estão FORA do componente (acima)
 
-  // Filtrar campos numéricos (excluir contextuais como "período", "data", etc e campos de texto)
-  const isNumericField = (field: string): boolean => {
-    const fieldLower = field.toLowerCase();
-    const nonNumericKeywords = ['período', 'periodo', 'data', 'mês', 'mes', 'semana', 'dia'];
-    
-    // Se for campo de texto, não é numérico
-    if (isTextField(field)) {
-      return false;
-    }
-    
-    // Se contém palavra-chave não numérica, não é numérico
-    return !nonNumericKeywords.some(keyword => fieldLower.includes(keyword));
-  };
-
-  const getNumericFields = (): string[] => {
-    return requiredData.filter(field => isNumericField(field));
-  };
-
-  const getTextFields = (): string[] => {
-    return requiredData.filter(field => isTextField(field));
-  };
-
-  // Calcular resultado em tempo real
+  // Calcular resultado em tempo real quando inputs mudam
   useEffect(() => {
-    if (requiredData.length > 0 && formula) {
-      calculateResult();
+    if (!formula || numericFields.length === 0) {
+      console.log('⏭️ Pulando cálculo: sem fórmula ou sem campos');
+      return;
     }
-  }, [dynamicInputs, formula, requiredData]);
 
-  const calculateResult = () => {
+    console.log('🧮 Calculando resultado...');
+    console.log('  - formula:', formula);
+    console.log('  - numericFields:', numericFields);
+    console.log('  - dynamicInputs:', dynamicInputs);
+    
     try {
-      const numericFields = getNumericFields();
-      
-      // Verificar se todos os campos NUMÉRICOS necessários foram preenchidos
-      // IGNORAR campos de texto (informativos)
+      // Verificar se todos os campos numéricos foram preenchidos
       const allFilled = numericFields.every(field => {
         const value = dynamicInputs[field];
-        return value !== undefined && value !== '' && !isNaN(parseFloat(value));
+        const isFilled = value !== undefined && value !== '' && !isNaN(parseFloat(value));
+        console.log(`  - "${field}": valor="${value}", preenchido=${isFilled}`);
+        return isFilled;
       });
 
-      if (!allFilled || numericFields.length === 0) {
+      if (!allFilled) {
+        console.log('  ⏸️ Ainda não: campos não preenchidos');
         setCalculatedResult(0);
         return;
       }
 
-      // Pegar valores APENAS dos campos numéricos (ignorar texto)
-      const values = numericFields
-        .filter(field => !isTextField(field)) // Proteção extra: garantir que não há campos de texto
-        .map(field => parseFloat(dynamicInputs[field]) || 0);
+      // 🔥 CORREÇÃO CRÍTICA: Substituir variáveis POR NOME, não por índice
+      let formulaProcessed = formula;
       
-      // Estratégia simplificada: detectar operação da fórmula
-      const formulaLower = formula.toLowerCase();
-      let result = 0;
+      console.log('  📝 Substituindo variáveis na fórmula:');
+      console.log('  - Fórmula ORIGINAL:', formula);
       
-      if (values.length === 2) {
-        // Casos mais comuns com 2 valores
-        if (formulaLower.includes('/') || formulaLower.includes('dividido') || formulaLower.includes('divid')) {
-          // Divisão: valor1 / valor2
-          result = values[0] / (values[1] || 1); // Evitar divisão por zero
-        } else if (formulaLower.includes('*') || formulaLower.includes('×') || formulaLower.includes('multiplicado') || formulaLower.includes('vezes')) {
-          // Multiplicação: valor1 * valor2
-          result = values[0] * values[1];
-        } else if (formulaLower.includes('-') || formulaLower.includes('menos') || formulaLower.includes('subtrai')) {
-          // Subtração: valor1 - valor2
-          result = values[0] - values[1];
-        } else if (formulaLower.includes('+') || formulaLower.includes('mais') || formulaLower.includes('soma')) {
-          // Adição: valor1 + valor2
-          result = values[0] + values[1];
+      // Substituir cada variável pelo seu valor correspondente (pelo NOME)
+      Object.entries(dynamicInputs).forEach(([fieldName, fieldValue]) => {
+        const numericValue = parseFloat(fieldValue as string) || 0;
+        
+        // Criar regex com word boundary para evitar substituições parciais
+        // Ex: "ativos" não deve substituir "ativos_inicio"
+        const regex = new RegExp(`\\b${fieldName}\\b`, 'gi');
+        
+        // Contar quantas vezes a variável aparece na fórmula
+        const matches = formulaProcessed.match(regex);
+        
+        if (matches && matches.length > 0) {
+          console.log(`    ✅ "${fieldName}" → ${numericValue} (encontrado ${matches.length}x)`);
+          formulaProcessed = formulaProcessed.replace(regex, String(numericValue));
         } else {
-          // Padrão: divisão (caso mais comum para indicadores)
-          result = values[0] / (values[1] || 1);
+          console.log(`    ⚠️ "${fieldName}" não encontrado na fórmula`);
         }
-      } else if (values.length === 3) {
-        // Para 3 valores, geralmente é: (val1 * val2) / val3 ou val1 * val2 * val3
-        if (formulaLower.includes('/') || formulaLower.includes('dividido')) {
-          result = (values[0] * values[1]) / (values[2] || 1);
-        } else {
-          result = values[0] * values[1] * values[2];
-        }
-      } else if (values.length === 1) {
-        // Apenas um valor
-        result = values[0];
-      } else {
-        // Fallback: soma de todos os valores
-        result = values.reduce((acc, val) => acc + val, 0);
-      }
+      });
+      
+      console.log('  - Fórmula PROCESSADA:', formulaProcessed);
+      
+      // Avaliar a expressão matemática
+      const result = evaluateSafeExpression(formulaProcessed);
       
       if (!isNaN(result) && isFinite(result)) {
-        setCalculatedResult(Math.round(result * 100) / 100);
+        const rounded = Math.round(result * 100) / 100;
+        console.log(`  ✅ RESULTADO FINAL: ${rounded}`);
+        setCalculatedResult(rounded);
       } else {
+        console.log('  ❌ Resultado inválido:', result);
         setCalculatedResult(0);
       }
     } catch (err) {
-      console.error('Erro ao calcular:', err);
+      console.error('❌ Erro ao calcular:', err);
       setCalculatedResult(0);
     }
-  };
+  }, [dynamicInputs, formula, numericFields]);
 
   // Avaliador de expressão matemática seguro (sem eval)
   const evaluateSafeExpression = (expr: string): number => {
@@ -269,9 +470,10 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     if (numbers && numbers.length > 0) {
       const normalizedNumbers = numbers.map(n => n.replace(',', '.'));
       
-      // Mapear números para campos na ordem
+      // Mapear números para campos na ordem (usar dynamicFields do derived state)
+      const fieldsToFill = numericFields.length > 0 ? numericFields : Object.keys(dynamicInputs);
       const newInputs = { ...dynamicInputs };
-      requiredData.forEach((field, index) => {
+      fieldsToFill.forEach((field, index) => {
         if (index < normalizedNumbers.length) {
           newInputs[field] = normalizedNumbers[index];
         }
@@ -293,38 +495,24 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     }
   };
 
-  const getFieldHint = (field: string): string => {
-    const fieldLower = field.toLowerCase();
-    
-    // Procurar por palavras-chave no nome do campo
-    for (const [key, hint] of Object.entries(fieldHints)) {
-      if (fieldLower.includes(key)) {
-        return hint;
-      }
-    }
-    
-    return "Insira o valor deste dado para o período selecionado";
-  };
-
   const handleSave = async () => {
     try {
       console.log('=== INICIANDO SALVAMENTO ===');
       console.log('calculatedResult:', calculatedResult);
       console.log('targetValue:', targetValue);
       console.log('dynamicInputs:', dynamicInputs);
-      console.log('requiredData:', requiredData);
+      console.log('numericFields:', numericFields);
       
       setLoading(true);
 
       let finalValue = calculatedResult;
       const targetValueNum = parseFloat(targetValue) || 0;
 
-      // Se não há campos numéricos (fallback manual), usar o valor digitado
-      const numericFields = getNumericFields();
-      console.log('numericFields:', numericFields);
+      console.log('numericFields (from derived state):', numericFields);
       
-      if (numericFields.length === 0 && requiredData.length === 0) {
-        // Modo manual: não há required_data, usar calculatedResult diretamente
+      // Se não há campos numéricos (fallback manual), usar o valor digitado
+      if (numericFields.length === 0) {
+        // Modo manual: não há campos dinâmicos, usar calculatedResult diretamente
         finalValue = calculatedResult;
       }
 
@@ -353,7 +541,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       }
 
       // Se não há campos e o valor é 0, não permitir salvar
-      if (finalValue === 0 && numericFields.length === 0 && requiredData.length === 0) {
+      if (finalValue === 0 && numericFields.length === 0) {
         toast({
           variant: "destructive",
           title: "Valor inválido",
@@ -382,13 +570,16 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
 
       console.log('Usuário:', user.id);
 
-      // 1. UPDATE na tabela user_indicators
+      // 1. UPDATE na tabela user_indicators (incluindo last_inputs)
       console.log('Fazendo UPDATE em user_indicators...');
+      console.log('💾 Salvando inputs para próxima vez:', dynamicInputs);
+      
       const { error: updateError } = await (supabase as any)
         .from('user_indicators')
         .update({
           current_value: finalValue,
           target_value: targetValueNum,
+          last_inputs: dynamicInputs, // 💾 Salvar inputs para "memória"
           updated_at: new Date().toISOString(),
         })
         .eq('id', kpi.id)
@@ -489,23 +680,26 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
               </Card>
             )}
 
-            {/* Inputs Dinâmicos Baseados em required_data */}
-            {requiredData.length > 0 ? (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2 mb-2">
+            {/* ============================================ */}
+            {/* INPUTS DINÂMICOS vs FALLBACK */}
+            {/* ============================================ */}
+            {showDynamicInputs ? (
+              /* ✅ MODO DINÂMICO: Renderiza inputs baseados em input_fields */
+              <div className="space-y-4 mb-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border">
+                <div className="flex items-center space-x-2 mb-3">
                   <TrendingUp className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-semibold">Dados Necessários</h3>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Dados do Indicador</h4>
+                  <Badge variant="secondary" className="text-xs">
+                    {numericFields.length} campo{numericFields.length !== 1 ? 's' : ''}
+                  </Badge>
                 </div>
 
-                {/* Campos Numéricos (usados no cálculo) */}
-                {requiredData.filter(field => isNumericField(field)).map((field, index) => (
-                  <div key={`numeric-${index}`} className="space-y-2">
-                    <Label htmlFor={`field-${index}`} className="text-base font-medium flex items-center space-x-2">
-                      <Calculator className="w-4 h-4 text-primary" />
-                      <span>{field}</span>
-                      <Badge variant="outline" className="text-xs bg-primary/10 border-primary/30">
-                        Numérico
-                      </Badge>
+                {/* Campos Numéricos */}
+                {numericFields.map((field, index) => (
+                  <div key={`dynamic-${field}-${index}`} className="space-y-1">
+                    <Label htmlFor={`field-${index}`} className="capitalize text-xs text-gray-500 dark:text-gray-400 flex items-center space-x-2">
+                      <Calculator className="w-3 h-3 text-primary" />
+                      <span>{field.replace(/_/g, ' ')}</span>
                     </Label>
                     <Input
                       id={`field-${index}`}
@@ -513,7 +707,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
                       step="0.01"
                       value={dynamicInputs[field] || ''}
                       onChange={(e) => handleDynamicInputChange(field, e.target.value)}
-                      className="text-lg h-12 border-primary/30 focus:border-primary"
+                      className="bg-white dark:bg-slate-800 h-10"
                       placeholder="0"
                       disabled={loading}
                     />
@@ -524,62 +718,47 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
                   </div>
                 ))}
 
-                {/* Campos de Texto (informativos, não entram no cálculo) */}
-                {getTextFields().length > 0 && (
-                  <div className="space-y-4 pt-4 border-t border-dashed">
+                {/* Campos de Texto (informativos) */}
+                {textFields.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-dashed">
                     <div className="flex items-center space-x-2">
-                      <Info className="w-4 h-4 text-muted-foreground" />
-                      <h4 className="text-sm font-medium text-muted-foreground">Informações Adicionais (opcional)</h4>
+                      <Info className="w-3 h-3 text-muted-foreground" />
+                      <h4 className="text-xs font-medium text-muted-foreground">Informações Adicionais (opcional)</h4>
                     </div>
                     
-                    {getTextFields().map((field, index) => (
-                      <div key={`text-${index}`} className="space-y-2">
-                        <Label htmlFor={`text-field-${index}`} className="text-sm font-medium flex items-center space-x-2 text-muted-foreground">
-                          <span>{field}</span>
-                          <Badge variant="secondary" className="text-xs">
-                            Informativo
-                          </Badge>
+                    {textFields.map((field, index) => (
+                      <div key={`text-${index}`} className="space-y-1">
+                        <Label htmlFor={`text-field-${index}`} className="capitalize text-xs text-gray-500 dark:text-gray-400">
+                          {field.replace(/_/g, ' ')}
                         </Label>
                         <Input
                           id={`text-field-${index}`}
                           type="text"
                           value={dynamicInputs[field] || ''}
                           onChange={(e) => handleDynamicInputChange(field, e.target.value)}
-                          className="h-10 bg-muted/30 border-muted"
-                          placeholder={`Ex: ${field.toLowerCase()}`}
+                          className="h-9 bg-muted/30 border-muted"
+                          placeholder={`Ex: ${field.replace(/_/g, ' ').toLowerCase()}`}
                           disabled={loading}
                         />
-                        <p className="text-xs text-muted-foreground/70 flex items-start space-x-1">
-                          <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                          <span>Este campo não é usado no cálculo, apenas para referência</span>
-                        </p>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Resultado Calculado em Tempo Real */}
-                {calculatedResult > 0 && (
-                  <Card className="bg-gradient-primary/10 border-primary/30">
-                    <CardContent className="pt-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground mb-1">Resultado Calculado:</p>
-                          <p className="text-3xl font-bold text-primary">
-                            {calculatedResult.toLocaleString('pt-BR')}
-                          </p>
-                        </div>
-                        <Calculator className="w-12 h-12 text-primary opacity-20" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                {/* Área de Resultado Preliminar */}
+                <div className="pt-2 border-t mt-3">
+                  <Label className="text-xs text-muted-foreground">Resultado Preliminar</Label>
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">
+                    {calculatedResult > 0 ? calculatedResult.toLocaleString('pt-BR') : '...'}
+                  </div>
+                </div>
               </div>
             ) : (
-              // Fallback: Se não houver required_data, mostrar campo manual simples
+              /* ⚠️ MODO FALLBACK: Input manual simples (indicadores antigos sem input_fields) */
               <div className="space-y-2">
-                <Label htmlFor="manualValue" className="text-base font-semibold">
-                  Valor Atual (Resultado)
+                <Label htmlFor="manualValue" className="text-base font-semibold flex items-center space-x-2">
+                  <span>Valor Atual (Resultado)</span>
+                  <Badge variant="secondary" className="text-xs">Manual</Badge>
                 </Label>
                 <Input
                   id="manualValue"
@@ -591,6 +770,9 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
                   placeholder="0"
                   disabled={loading}
                 />
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Este indicador não possui campos dinâmicos. Digite o valor manualmente.
+                </p>
               </div>
             )}
 
@@ -650,8 +832,14 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         <div className="space-y-4 pt-4 border-t">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="targetValue" className="text-base font-medium">
-                Meta (Target)
+              <Label htmlFor="targetValue" className="text-base font-medium flex items-center space-x-2">
+                <Target className="w-4 h-4 text-primary" />
+                <span>Meta (Target)</span>
+                {targetValue && parseFloat(targetValue) > 0 && (
+                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-300">
+                    Salva
+                  </Badge>
+                )}
               </Label>
               <Input
                 id="targetValue"
@@ -659,10 +847,53 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
                 step="0.01"
                 value={targetValue}
                 onChange={(e) => setTargetValue(e.target.value)}
+                onFocus={() => {
+                  // 🔧 v1.27: Alerta ao editar meta
+                  if (!targetValue || parseFloat(targetValue) === 0) return;
+                  toast({
+                    title: "⚠️ Meta Pessoal",
+                    description: "Se você alterar a meta, ela será sua meta pessoal e não será afetada por mudanças do administrador no template.",
+                    duration: 5000,
+                  });
+                }}
                 className="h-12"
-                placeholder="0"
+                placeholder="Digite a meta desejada"
                 disabled={loading}
               />
+              {templateDefaultTarget !== null && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Meta padrão do Admin: <span className="font-medium">{templateDefaultTarget}</span>
+                  </p>
+                  {Number(targetValue || 0) !== templateDefaultTarget && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => {
+                        setTargetValue(String(templateDefaultTarget));
+                        toast({
+                          title: "Meta aplicada",
+                          description: "Definimos a meta padrão do Admin como sua meta atual. Você ainda pode personalizar se quiser.",
+                          duration: 4000,
+                        });
+                      }}
+                      disabled={loading}
+                    >
+                      Usar meta do Admin
+                    </Button>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground flex items-start space-x-1">
+                <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <span>
+                  {targetValue && parseFloat(targetValue) > 0 
+                    ? "Esta é a meta salva anteriormente. Você pode alterá-la se necessário."
+                    : "Defina uma meta para este indicador"}
+                </span>
+              </p>
             </div>
 
             <div className="space-y-2">

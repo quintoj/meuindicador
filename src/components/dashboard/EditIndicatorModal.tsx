@@ -9,8 +9,11 @@ import { Loader2, Edit, Trash2, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-// Email do admin - mesmo usado no Store
-const ADMIN_EMAIL = "admin@meugestor.com";
+// Emails de admin - aceita ambos os emails (antigo e novo)
+const ADMIN_EMAILS = [
+  "admin@meuindicador.com",
+  "admin@meugestor.com"  // Email antigo mantido para compatibilidade
+];
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,7 +56,8 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
   useEffect(() => {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      setIsAdmin(user?.email === ADMIN_EMAIL);
+      // Verifica se o email está na lista de admins
+      setIsAdmin(user?.email ? ADMIN_EMAILS.includes(user.email) : false);
     };
     checkAdmin();
   }, []);

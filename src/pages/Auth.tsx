@@ -146,7 +146,7 @@ const Auth = () => {
             <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-foreground">Meu Gestor</span>
+            <span className="text-2xl font-bold text-foreground">Meu Indicador</span>
           </div>
         </div>
 

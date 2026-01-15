@@ -7,163 +7,226 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
-  }
   public: {
     Tables: {
-      indicator_templates: {
+      indicator_history: {
         Row: {
-          id: string
-          name: string
-          description: string
-          formula: string
-          importance: string
-          segment: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral"
-          complexity: "Fácil" | "Intermediário" | "Avançado"
-          icon_name: string | null
-          required_data: Json
           created_at: string
-          updated_at: string
+          id: string
+          indicator_id: string
+          recorded_at: string | null
+          user_id: string
+          value: number
         }
         Insert: {
-          id?: string
-          name: string
-          description: string
-          formula: string
-          importance: string
-          segment?: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral"
-          complexity?: "Fácil" | "Intermediário" | "Avançado"
-          icon_name?: string | null
-          required_data?: Json
           created_at?: string
-          updated_at?: string
+          id?: string
+          indicator_id: string
+          recorded_at?: string | null
+          user_id: string
+          value: number
         }
         Update: {
-          id?: string
-          name?: string
-          description?: string
-          formula?: string
-          importance?: string
-          segment?: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral"
-          complexity?: "Fácil" | "Intermediário" | "Avançado"
-          icon_name?: string | null
-          required_data?: Json
           created_at?: string
-          updated_at?: string
+          id?: string
+          indicator_id?: string
+          recorded_at?: string | null
+          user_id?: string
+          value?: number
         }
+        Relationships: [
+          {
+            foreignKeyName: "indicator_history_indicator_id_fkey"
+            columns: ["indicator_id"]
+            isOneToOne: false
+            referencedRelation: "user_indicators"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      indicator_templates: {
+        Row: {
+          calc_method: string
+          complexity: Database["public"]["Enums"]["complexity_level"]
+          created_at: string
+          default_critical_threshold: number | null
+          default_warning_threshold: number | null
+          description: string
+          direction: Database["public"]["Enums"]["indicator_direction"]
+          formula: string
+          icon_name: string
+          id: string
+          importance: string
+          input_fields: Json
+          name: string
+          required_data: Json
+          segment: Database["public"]["Enums"]["business_segment"]
+          unit_type: Database["public"]["Enums"]["unit_type"]
+          updated_at: string | null
+        }
+        Insert: {
+          calc_method?: string
+          complexity?: Database["public"]["Enums"]["complexity_level"]
+          created_at?: string
+          default_critical_threshold?: number | null
+          default_warning_threshold?: number | null
+          description: string
+          direction?: Database["public"]["Enums"]["indicator_direction"]
+          formula: string
+          icon_name: string
+          id?: string
+          importance: string
+          input_fields?: Json
+          name: string
+          required_data: Json
+          segment?: Database["public"]["Enums"]["business_segment"]
+          unit_type?: Database["public"]["Enums"]["unit_type"]
+          updated_at?: string | null
+        }
+        Update: {
+          calc_method?: string
+          complexity?: Database["public"]["Enums"]["complexity_level"]
+          created_at?: string
+          default_critical_threshold?: number | null
+          default_warning_threshold?: number | null
+          description?: string
+          direction?: Database["public"]["Enums"]["indicator_direction"]
+          formula?: string
+          icon_name?: string
+          id?: string
+          importance?: string
+          input_fields?: Json
+          name?: string
+          required_data?: Json
+          segment?: Database["public"]["Enums"]["business_segment"]
+          unit_type?: Database["public"]["Enums"]["unit_type"]
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       user_indicators: {
         Row: {
+          created_at: string
+          current_value: number | null
+          format: Database["public"]["Enums"]["value_format"]
           id: string
-          user_id: string
           indicator_template_id: string
+          is_active: boolean | null
+          last_inputs: Json | null
           name: string
-          current_value: number
           target_value: number | null
-          format: "currency" | "percentage" | "number"
-          segment: string | null
-          icon_name: string | null
-          is_active: boolean
-          position: number | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
+          updated_at: string | null
           user_id: string
-          indicator_template_id: string
-          name: string
-          current_value?: number
-          target_value?: number | null
-          format?: "currency" | "percentage" | "number"
-          segment?: string | null
-          icon_name?: string | null
-          is_active?: boolean
-          position?: number | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          indicator_template_id?: string
-          name?: string
-          current_value?: number
-          target_value?: number | null
-          format?: "currency" | "percentage" | "number"
-          segment?: string | null
-          icon_name?: string | null
-          is_active?: boolean
-          position?: number | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      indicator_history: {
-        Row: {
-          id: string
-          user_indicator_id: string
-          value: number
-          recorded_at: string
-          notes: string | null
-          created_at: string
         }
         Insert: {
-          id?: string
-          user_indicator_id: string
-          value: number
-          recorded_at?: string
-          notes?: string | null
           created_at?: string
+          current_value?: number | null
+          format?: Database["public"]["Enums"]["value_format"]
+          id?: string
+          indicator_template_id: string
+          is_active?: boolean | null
+          last_inputs?: Json | null
+          name: string
+          target_value?: number | null
+          updated_at?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          user_indicator_id?: string
-          value?: number
-          recorded_at?: string
-          notes?: string | null
           created_at?: string
+          current_value?: number | null
+          format?: Database["public"]["Enums"]["value_format"]
+          id?: string
+          indicator_template_id?: string
+          is_active?: boolean | null
+          last_inputs?: Json | null
+          name?: string
+          target_value?: number | null
+          updated_at?: string | null
+          user_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "user_indicators_indicator_template_id_fkey"
+            columns: ["indicator_template_id"]
+            isOneToOne: false
+            referencedRelation: "indicator_templates"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       user_profiles: {
         Row: {
-          id: string
-          full_name: string | null
           business_name: string | null
-          business_segment: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral" | null
+          business_segment: Database["public"]["Enums"]["business_segment"] | null
           created_at: string
-          updated_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string | null
         }
         Insert: {
-          id: string
-          full_name?: string | null
           business_name?: string | null
-          business_segment?: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral" | null
+          business_segment?: Database["public"]["Enums"]["business_segment"] | null
           created_at?: string
-          updated_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          full_name?: string | null
           business_name?: string | null
-          business_segment?: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral" | null
+          business_segment?: Database["public"]["Enums"]["business_segment"] | null
           created_at?: string
-          updated_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
         }
+        Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      v_indicator_templates_analysis: {
+        Row: {
+          behavior_description: string | null
+          calc_method: string | null
+          complexity: Database["public"]["Enums"]["complexity_level"] | null
+          created_at: string | null
+          default_critical_threshold: number | null
+          default_warning_threshold: number | null
+          direction: Database["public"]["Enums"]["indicator_direction"] | null
+          id: string | null
+          input_fields: Json | null
+          name: string | null
+          num_required_fields: number | null
+          segment: Database["public"]["Enums"]["business_segment"] | null
+          unit_type: Database["public"]["Enums"]["unit_type"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      get_indicator_status: {
+        Args: {
+          current_value: number
+          target_value: number
+          direction: Database["public"]["Enums"]["indicator_direction"]
+          warning_threshold: number
+          critical_threshold: number
+        }
+        Returns: string
+      }
     }
     Enums: {
+      business_segment:
+        | "Academia"
+        | "Restaurante"
+        | "PetShop"
+        | "Contabilidade"
+        | "Geral"
       complexity_level: "Fácil" | "Intermediário" | "Avançado"
-      business_segment: "Academia" | "Restaurante" | "Contabilidade" | "PetShop" | "Geral"
+      indicator_direction: "HIGHER_BETTER" | "LOWER_BETTER" | "NEUTRAL_RANGE"
+      unit_type: "currency" | "percentage" | "integer" | "decimal"
       value_format: "currency" | "percentage" | "number"
     }
     CompositeTypes: {
@@ -172,33 +235,27 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type PublicSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  PublicTableNameOrOptions extends
+    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
+        PublicSchema["Views"])
+    ? (PublicSchema["Tables"] &
+        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -206,24 +263,20 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -231,24 +284,20 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -256,45 +305,30 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  PublicEnumNameOrOptions extends
+    | keyof PublicSchema["Enums"]
+    | { schema: keyof Database },
+  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
+    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    | keyof PublicSchema["CompositeTypes"]
+    | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof Database
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
+    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
-export const Constants = {
-  public: {
-    Enums: {
-      complexity_level: ["Fácil", "Intermediário", "Avançado"],
-      business_segment: ["Academia", "Restaurante", "Contabilidade", "PetShop", "Geral"],
-      value_format: ["currency", "percentage", "number"],
-    },
-  },
-} as const

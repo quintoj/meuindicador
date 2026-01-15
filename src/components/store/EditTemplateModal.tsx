@@ -1,13 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Edit, Plus, X, Trash2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, Edit, Plus, X, Trash2, TrendingUp, TrendingDown, Target, Calculator } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,25 +26,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface EditTemplateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  template: Tables<'indicator_templates'> | null;
   onSuccess: () => void;
-  templateId: string;
-  initialData: {
-    name: string;
-    description: string;
-    formula: string;
-    importance: string;
-    segment: string;
-    complexity: string;
-    icon_name: string;
-    required_data: string[];
-  };
 }
 
-const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialData }: EditTemplateModalProps) => {
+interface Variable {
+  name: string;
+  type: 'fixed' | 'daily';
+}
+
+const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemplateModalProps) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [formula, setFormula] = useState("");
@@ -44,36 +48,172 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
   const [segment, setSegment] = useState<string>("Geral");
   const [complexity, setComplexity] = useState<string>("Fácil");
   const [iconName, setIconName] = useState("");
-  const [requiredDataInput, setRequiredDataInput] = useState("");
-  const [requiredDataList, setRequiredDataList] = useState<string[]>([]);
+  
+  // Novos campos
+  const [direction, setDirection] = useState<string>("HIGHER_BETTER");
+  const [unitType, setUnitType] = useState<string>("integer");
+  const [calcMethod, setCalcMethod] = useState<string>("formula");
+  const [defaultWarningThreshold, setDefaultWarningThreshold] = useState<string>("");
+  const [defaultCriticalThreshold, setDefaultCriticalThreshold] = useState<string>("");
+  
+  // Gerenciador de Variáveis
+  const [variables, setVariables] = useState<Variable[]>([]);
+  const [newVarName, setNewVarName] = useState("");
+  const [newVarType, setNewVarType] = useState<'fixed' | 'daily'>('fixed');
+  
   const [loading, setLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
+  
+  const formulaTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Carregar dados iniciais quando abrir
+  // Carregar dados do template ao abrir
   useEffect(() => {
-    if (open && initialData) {
-      setName(initialData.name);
-      setDescription(initialData.description);
-      setFormula(initialData.formula);
-      setImportance(initialData.importance);
-      setSegment(initialData.segment);
-      setComplexity(initialData.complexity);
-      setIconName(initialData.icon_name || "");
-      setRequiredDataList(initialData.required_data || []);
+    if (open && template) {
+      console.log('📊 Carregando template:', template);
+      console.log('🔍 Campos de configuração:');
+      console.log('  - direction:', template.direction);
+      console.log('  - unit_type:', template.unit_type);
+      console.log('  - calc_method:', template.calc_method);
+      console.log('  - default_warning_threshold:', template.default_warning_threshold);
+      console.log('  - default_critical_threshold:', template.default_critical_threshold);
+      
+      setName(template.name || "");
+      setDescription(template.description || "");
+      setFormula(template.formula || "");
+      setImportance(template.importance || "");
+      setSegment(template.segment || "Geral");
+      setComplexity(template.complexity || "Fácil");
+      setIconName(template.icon_name || "");
+      
+      // 🔧 CORREÇÃO: Garantir valores default corretos e conversão de ENUMs
+      const directionValue = template.direction || "HIGHER_BETTER";
+      const unitTypeValue = template.unit_type || "integer";
+      const calcMethodValue = template.calc_method || "formula";
+      
+      console.log('✅ Setando valores:');
+      console.log('  - direction → ', directionValue);
+      console.log('  - unit_type → ', unitTypeValue);
+      console.log('  - calc_method → ', calcMethodValue);
+      
+      setDirection(directionValue);
+      setUnitType(unitTypeValue);
+      setCalcMethod(calcMethodValue);
+      setDefaultWarningThreshold(template.default_warning_threshold?.toString() || "");
+      setDefaultCriticalThreshold(template.default_critical_threshold?.toString() || "");
+      
+      // 🔥 PARSE de input_fields (JSONB)
+      let loadedVariables: Variable[] = [];
+      
+      if (template.input_fields) {
+        try {
+          let inputFieldsJSON: any;
+          
+          if (typeof template.input_fields === 'string') {
+            inputFieldsJSON = JSON.parse(template.input_fields);
+          } else {
+            inputFieldsJSON = template.input_fields;
+          }
+          
+          const fixed = Array.isArray(inputFieldsJSON.fixed) ? inputFieldsJSON.fixed : [];
+          const daily = Array.isArray(inputFieldsJSON.daily) ? inputFieldsJSON.daily : [];
+          
+          loadedVariables = [
+            ...fixed.map((name: string) => ({ name, type: 'fixed' as const })),
+            ...daily.map((name: string) => ({ name, type: 'daily' as const })),
+          ];
+          
+          console.log('✅ Variáveis carregadas de input_fields:', loadedVariables);
+        } catch (err) {
+          console.error('❌ Erro ao parsear input_fields:', err);
+        }
+      }
+      
+      // Fallback: required_data (antigo)
+      if (loadedVariables.length === 0 && template.required_data) {
+        try {
+          let requiredDataArray: string[] = [];
+          
+          if (Array.isArray(template.required_data)) {
+            requiredDataArray = template.required_data;
+          } else if (typeof template.required_data === 'string') {
+            const parsed = JSON.parse(template.required_data);
+            requiredDataArray = Array.isArray(parsed) ? parsed : [];
+          }
+          
+          loadedVariables = requiredDataArray.map(name => ({ name, type: 'fixed' as const }));
+          console.log('⚠️ Usando fallback required_data:', loadedVariables);
+        } catch (err) {
+          console.error('❌ Erro ao parsear required_data:', err);
+        }
+      }
+      
+      setVariables(loadedVariables);
     }
-  }, [open, initialData]);
+  }, [open, template]);
 
-  const handleAddRequiredData = () => {
-    if (requiredDataInput.trim()) {
-      setRequiredDataList([...requiredDataList, requiredDataInput.trim()]);
-      setRequiredDataInput("");
-    }
+  const toSnakeCase = (str: string): string => {
+    return str
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
   };
 
-  const handleRemoveRequiredData = (index: number) => {
-    setRequiredDataList(requiredDataList.filter((_, i) => i !== index));
+  const handleAddVariable = () => {
+    if (!newVarName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Nome vazio",
+        description: "Digite um nome para a variável.",
+      });
+      return;
+    }
+
+    const snakeCaseName = toSnakeCase(newVarName);
+    
+    if (variables.some(v => v.name === snakeCaseName)) {
+      toast({
+        variant: "destructive",
+        title: "Variável duplicada",
+        description: `A variável "${snakeCaseName}" já existe.`,
+      });
+      return;
+    }
+
+    setVariables([...variables, { name: snakeCaseName, type: newVarType }]);
+    setNewVarName("");
+    
+    toast({
+      title: "Variável adicionada!",
+      description: `"${snakeCaseName}" (${newVarType === 'fixed' ? 'Fixo' : 'Diário'})`,
+    });
+  };
+
+  const handleRemoveVariable = (index: number) => {
+    setVariables(variables.filter((_, i) => i !== index));
+  };
+
+  const handleInsertVariable = (varName: string) => {
+    if (!formulaTextareaRef.current) return;
+
+    const textarea = formulaTextareaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentFormula = formula;
+
+    const newFormula = 
+      currentFormula.substring(0, start) + 
+      varName + 
+      currentFormula.substring(end);
+
+    setFormula(newFormula);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + varName.length, start + varName.length);
+    }, 0);
   };
 
   const handleSave = async () => {
@@ -84,11 +224,27 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
         toast({
           variant: "destructive",
           title: "Campos obrigatórios",
-          description: "Por favor, preencha todos os campos obrigatórios.",
+          description: "Por favor, preencha Nome, Descrição, Fórmula e Importância.",
         });
         setLoading(false);
         return;
       }
+
+      if (!template) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Template não encontrado.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Construir input_fields JSON
+      const inputFields = {
+        fixed: variables.filter(v => v.type === 'fixed').map(v => v.name),
+        daily: variables.filter(v => v.type === 'daily').map(v => v.name),
+      };
 
       // Atualizar template
       const { error } = await (supabase as any)
@@ -101,17 +257,21 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
           segment: segment,
           complexity: complexity,
           icon_name: iconName.trim() || null,
-          required_data: JSON.stringify(requiredDataList),
+          direction: direction,
+          unit_type: unitType,
+          calc_method: calcMethod.trim(),
+          default_warning_threshold: defaultWarningThreshold ? parseFloat(defaultWarningThreshold) : null,
+          default_critical_threshold: defaultCriticalThreshold ? parseFloat(defaultCriticalThreshold) : null,
+          input_fields: inputFields,
+          required_data: JSON.stringify(variables.map(v => v.name)), // Fallback
           updated_at: new Date().toISOString(),
         })
-        .eq('id', templateId);
+        .eq('id', template.id);
 
       if (error) {
-        // Log detalhado do erro
         console.error('Erro detalhado ao atualizar template:', error.message || error);
         console.error('Código do erro:', error.code);
 
-        // Erro de nome duplicado
         if (error.code === '23505') {
           toast({
             variant: "destructive",
@@ -122,7 +282,6 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
           return;
         }
 
-        // Erro de permissão RLS
         if (error.code === '42501' || error.message?.includes('permission denied') || error.message?.includes('RLS')) {
           toast({
             variant: "destructive",
@@ -145,7 +304,6 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
       onSuccess();
     } catch (err: any) {
       console.error('Erro detalhado:', err.message || err);
-      console.error('Objeto completo:', err);
 
       const errorMessage = err.message || '';
       if (errorMessage.includes('permission') || errorMessage.includes('RLS') || errorMessage.includes('policy')) {
@@ -170,16 +328,24 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
     try {
       setDeleting(true);
 
-      // Deletar template
+      if (!template) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Template não encontrado.",
+        });
+        setDeleting(false);
+        return;
+      }
+
       const { error } = await (supabase as any)
         .from('indicator_templates')
         .delete()
-        .eq('id', templateId);
+        .eq('id', template.id);
 
       if (error) {
         console.error('Erro detalhado ao deletar:', error.message || error);
         
-        // Erro de permissão
         if (error.code === '42501' || error.message?.includes('permission')) {
           toast({
             variant: "destructive",
@@ -190,7 +356,6 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
           return;
         }
 
-        // Erro de referência (template em uso)
         if (error.code === '23503') {
           toast({
             variant: "destructive",
@@ -225,178 +390,319 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
     }
   };
 
+  if (!template) return null;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold flex items-center space-x-2">
-              <Edit className="w-6 h-6" />
-              <span>Editar Template</span>
+              <Edit className="w-6 h-6 text-primary" />
+              <span>KPI Builder - Editar Indicador</span>
             </DialogTitle>
+            <p className="text-sm text-muted-foreground">Atualize a configuração do indicador</p>
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Nome */}
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-base font-semibold">
-                Nome do Indicador *
-              </Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Ticket Médio"
-                disabled={loading}
-              />
-            </div>
-
-            {/* Descrição */}
-            <div className="space-y-2">
-              <Label htmlFor="description" className="text-base font-semibold">
-                Descrição *
-              </Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Descreva o que este indicador mede..."
-                rows={3}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Fórmula */}
-            <div className="space-y-2">
-              <Label htmlFor="formula" className="text-base font-semibold">
-                Fórmula *
-              </Label>
-              <Textarea
-                id="formula"
-                value={formula}
-                onChange={(e) => setFormula(e.target.value)}
-                placeholder="Ex: Faturamento total / Número de clientes"
-                rows={2}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Importância */}
-            <div className="space-y-2">
-              <Label htmlFor="importance" className="text-base font-semibold">
-                Por que é importante? *
-              </Label>
-              <Textarea
-                id="importance"
-                value={importance}
-                onChange={(e) => setImportance(e.target.value)}
-                placeholder="Explique a importância deste indicador..."
-                rows={2}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Segmento e Complexidade */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="segment" className="text-base font-semibold">
-                  Segmento *
-                </Label>
-                <select
-                  id="segment"
-                  value={segment}
-                  onChange={(e) => setSegment(e.target.value)}
-                  disabled={loading}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="Geral">Geral</option>
-                  <option value="Academia">Academia</option>
-                  <option value="Restaurante">Restaurante</option>
-                  <option value="Contabilidade">Contabilidade</option>
-                  <option value="PetShop">Pet Shop</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="complexity" className="text-base font-semibold">
-                  Complexidade *
-                </Label>
-                <select
-                  id="complexity"
-                  value={complexity}
-                  onChange={(e) => setComplexity(e.target.value)}
-                  disabled={loading}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="Fácil">Fácil</option>
-                  <option value="Intermediário">Intermediário</option>
-                  <option value="Avançado">Avançado</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Ícone */}
-            <div className="space-y-2">
-              <Label htmlFor="iconName" className="text-base font-semibold">
-                Nome do Ícone (Lucide React)
-              </Label>
-              <Input
-                id="iconName"
-                value={iconName}
-                onChange={(e) => setIconName(e.target.value)}
-                placeholder="Ex: DollarSign, Users, Target"
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Opções: Users, DollarSign, Percent, Target, Clock, PawPrint, Heart, Award, etc.
-              </p>
-            </div>
-
-            {/* Dados Necessários */}
-            <div className="space-y-2">
-              <Label className="text-base font-semibold">
-                Dados Necessários
-              </Label>
-              <div className="flex space-x-2">
-                <Input
-                  value={requiredDataInput}
-                  onChange={(e) => setRequiredDataInput(e.target.value)}
-                  placeholder="Ex: Faturamento mensal"
-                  disabled={loading}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddRequiredData();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  onClick={handleAddRequiredData}
-                  disabled={loading || !requiredDataInput.trim()}
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-              {requiredDataList.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {requiredDataList.map((data, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {data}
-                      <button
-                        onClick={() => handleRemoveRequiredData(index)}
-                        className="ml-1 hover:text-destructive"
-                        disabled={loading}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </Badge>
-                  ))}
+            {/* SEÇÃO 1: INFORMAÇÕES BÁSICAS */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">📋 Informações Básicas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-base font-semibold">Nome do Indicador *</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Taxa de Churn (Cancelamento)"
+                    disabled={loading}
+                  />
                 </div>
-              )}
-            </div>
 
-            {/* Botão Deletar */}
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-base font-semibold">Descrição *</Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descreva o que este indicador mede..."
+                    rows={3}
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="importance" className="text-base font-semibold">Por que é importante? *</Label>
+                  <Textarea
+                    id="importance"
+                    value={importance}
+                    onChange={(e) => setImportance(e.target.value)}
+                    placeholder="Explique a importância deste indicador..."
+                    rows={2}
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="segment">Segmento *</Label>
+                    <Select value={segment} onValueChange={setSegment} disabled={loading}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Geral">Geral</SelectItem>
+                        <SelectItem value="Academia">Academia</SelectItem>
+                        <SelectItem value="Restaurante">Restaurante</SelectItem>
+                        <SelectItem value="Contabilidade">Contabilidade</SelectItem>
+                        <SelectItem value="PetShop">Pet Shop</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="complexity">Complexidade *</Label>
+                    <Select value={complexity} onValueChange={setComplexity} disabled={loading}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Fácil">Fácil</SelectItem>
+                        <SelectItem value="Intermediário">Intermediário</SelectItem>
+                        <SelectItem value="Avançado">Avançado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="iconName">Ícone</Label>
+                    <Input
+                      id="iconName"
+                      value={iconName}
+                      onChange={(e) => setIconName(e.target.value)}
+                      placeholder="DollarSign, Users"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SEÇÃO 2: CONFIGURAÇÃO DE COMPORTAMENTO */}
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center space-x-2">
+                  <Calculator className="w-5 h-5 text-primary" />
+                  <span>⚙️ Configuração de Comportamento</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Direção (Melhor é...)</Label>
+                    <Select value={direction} onValueChange={setDirection} disabled={loading}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="HIGHER_BETTER">
+                          <div className="flex items-center space-x-2">
+                            <TrendingUp className="w-4 h-4 text-success" />
+                            <span>Maior é Melhor</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="LOWER_BETTER">
+                          <div className="flex items-center space-x-2">
+                            <TrendingDown className="w-4 h-4 text-warning" />
+                            <span>Menor é Melhor</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="NEUTRAL_RANGE">
+                          <div className="flex items-center space-x-2">
+                            <Target className="w-4 h-4 text-primary" />
+                            <span>Faixa Ideal</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Unidade de Medida</Label>
+                    <Select value={unitType} onValueChange={setUnitType} disabled={loading}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="currency">💰 Moeda (R$)</SelectItem>
+                        <SelectItem value="percentage">📊 Porcentagem (%)</SelectItem>
+                        <SelectItem value="integer">🔢 Número Inteiro</SelectItem>
+                        <SelectItem value="decimal">🔢 Número Decimal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Método de Cálculo</Label>
+                    <Input
+                      value={calcMethod}
+                      onChange={(e) => setCalcMethod(e.target.value)}
+                      placeholder="Ex: formula, sum, average"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Thresholds (Metas Padrão) */}
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label htmlFor="warningThreshold" className="flex items-center space-x-2">
+                      <span>⚠️ Meta de Alerta</span>
+                    </Label>
+                    <Input
+                      id="warningThreshold"
+                      type="number"
+                      step="0.01"
+                      value={defaultWarningThreshold}
+                      onChange={(e) => setDefaultWarningThreshold(e.target.value)}
+                      placeholder="Ex: 5 (para Churn 5%)"
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {direction === 'LOWER_BETTER' 
+                        ? 'Valores acima disso ficam amarelos' 
+                        : 'Valores abaixo disso ficam amarelos'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="criticalThreshold" className="flex items-center space-x-2">
+                      <span>🔴 Meta Crítica</span>
+                    </Label>
+                    <Input
+                      id="criticalThreshold"
+                      type="number"
+                      step="0.01"
+                      value={defaultCriticalThreshold}
+                      onChange={(e) => setDefaultCriticalThreshold(e.target.value)}
+                      placeholder="Ex: 8 (para Churn 8%)"
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {direction === 'LOWER_BETTER' 
+                        ? 'Valores acima disso ficam vermelhos' 
+                        : 'Valores abaixo disso ficam vermelhos'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SEÇÃO 3: VARIÁVEIS */}
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="text-lg">🔧 Variáveis do Indicador</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex space-x-2">
+                  <Input
+                    value={newVarName}
+                    onChange={(e) => setNewVarName(e.target.value)}
+                    placeholder="Nome da variável"
+                    disabled={loading}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddVariable();
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Select value={newVarType} onValueChange={(val) => setNewVarType(val as 'fixed' | 'daily')} disabled={loading}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">📌 Fixo</SelectItem>
+                      <SelectItem value="daily">📅 Diário</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    onClick={handleAddVariable}
+                    disabled={loading || !newVarName.trim()}
+                    className="bg-primary"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {variables.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Variáveis Criadas ({variables.length})</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {variables.map((variable, index) => (
+                        <Badge 
+                          key={index} 
+                          variant={variable.type === 'fixed' ? 'default' : 'secondary'}
+                          className="text-sm px-3 py-1"
+                        >
+                          {variable.type === 'fixed' ? '📌' : '📅'} {variable.name}
+                          <button
+                            onClick={() => handleRemoveVariable(index)}
+                            className="ml-2 hover:text-destructive"
+                            disabled={loading}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SEÇÃO 4: FÓRMULA */}
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader>
+                <CardTitle className="text-lg">🧮 Fórmula de Cálculo *</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
+                  ref={formulaTextareaRef}
+                  value={formula}
+                  onChange={(e) => setFormula(e.target.value)}
+                  placeholder="Ex: (cancelamentos / ativos_inicio) * 100"
+                  rows={3}
+                  disabled={loading}
+                  className="font-mono text-sm"
+                />
+
+                {variables.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">✨ Clique para inserir:</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {variables.map((variable, index) => (
+                        <Badge
+                          key={index}
+                          variant="outline"
+                          className="cursor-pointer hover:bg-primary/20 transition-colors px-3 py-1"
+                          onClick={() => handleInsertVariable(variable.name)}
+                        >
+                          {variable.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* BOTÃO DELETAR */}
             <div className="pt-4 border-t">
               <Button
                 variant="destructive"
@@ -407,9 +713,6 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
                 <Trash2 className="w-4 h-4 mr-2" />
                 Deletar Template da Loja
               </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                ⚠️ Atenção: Esta ação não pode ser desfeita
-              </p>
             </div>
           </div>
 
@@ -429,7 +732,7 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Atualizando...
+                  Salvando...
                 </>
               ) : (
                 <>
@@ -450,8 +753,7 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
             <AlertDialogDescription>
               Você está prestes a deletar <strong>{name}</strong> da loja de indicadores.
               <br /><br />
-              <strong>Atenção:</strong> Esta ação não pode ser desfeita. Os usuários que já adicionaram 
-              este indicador não serão afetados, mas ele não estará mais disponível na loja para novos usuários.
+              <strong>Atenção:</strong> Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -478,4 +780,3 @@ const EditTemplateModal = ({ open, onOpenChange, onSuccess, templateId, initialD
 };
 
 export default EditTemplateModal;
-

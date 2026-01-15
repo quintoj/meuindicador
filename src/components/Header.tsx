@@ -89,6 +89,26 @@ const Header = ({
     }
   };
 
+  const handleLogoClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    try {
+      // Verificar se há usuário logado
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Usuário logado → ir para Dashboard
+        navigate("/dashboard");
+      } else {
+        // Usuário não logado → ir para Home/Auth
+        navigate("/");
+      }
+    } catch (error) {
+      console.error('Erro ao verificar sessão:', error);
+      navigate("/");
+    }
+  };
+
   return (
     <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -98,12 +118,16 @@ const Header = ({
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
             </Link>
           )}
-          <Link to="/" className="flex items-center space-x-2">
+          <a 
+            href="#" 
+            onClick={handleLogoClick}
+            className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
+          >
             <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-foreground">Meu Gestor</span>
-          </Link>
+            <span className="text-xl font-bold text-foreground">Meu Indicador</span>
+          </a>
           {title && (
             <Badge variant="secondary" className="ml-4">
               {title}

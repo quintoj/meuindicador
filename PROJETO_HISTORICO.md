@@ -1098,6 +1098,466 @@ console.log('numericFields:', numericFields);
 
 ---
 
-**Última atualização:** Janeiro 2026
+## **v1.21** - Guias de Ajuda Interativos (15/01/2026)
+
+### 📚 **Manual do Administrador**
+
+**Componente Criado:** `src/components/admin/AdminHelpGuide.tsx`
+
+**Objetivo:** Documentação interativa para admins sobre como criar e gerenciar indicadores.
+
+**Características:**
+- Modal scrollable com 5 seções educativas
+- Visível apenas para usuários admin
+- Localizado na Store, ao lado do botão "Novo Template"
+- Conteúdo:
+  1. Conceito da "Engine" (Variáveis Fixas vs Diárias)
+  2. Regra do Semáforo (HIGHER_BETTER, LOWER_BETTER, NEUTRAL_RANGE)
+  3. Passo a passo para criar indicadores
+  4. Solução de problemas comuns
+  5. Boas práticas
+
+**Design:**
+- Cards coloridos por categoria (azul para Fixo, roxo para Diário)
+- Exemplos visuais práticos
+- Suporte a dark mode
+- Tipografia clara e hierárquica
+
+### 🎯 **Guia do Usuário Final**
+
+**Componente Criado:** `src/components/dashboard/UserHelpGuide.tsx`
+
+**Objetivo:** Ensinar gestores a usar o painel, adicionar indicadores e interpretar cores.
+
+**Características:**
+- Botão discreto "Ajuda" (ícone HelpCircle) no Dashboard
+- Localizado ao lado da barra de busca
+- Visível para todos os usuários
+- Conteúdo:
+  1. Como escolher indicadores na Loja
+  2. Diferença entre campos Diários e Fixos
+  3. Explicação do sistema de cores (Verde/Amarelo/Vermelho)
+  4. Dicas rápidas de uso
+
+**UX:**
+- Linguagem simples e didática
+- Analogia do "GPS para o negócio"
+- Exemplos práticos (Academia, Vendas)
+- Emojis e ícones para facilitar compreensão
+
+**Arquivos Modificados:**
+- `src/pages/Store.tsx` (integração do AdminHelpGuide)
+- `src/pages/Dashboard.tsx` (integração do UserHelpGuide)
+
+**Documentação Criada:**
+- `MANUAL_ADMIN_IMPLEMENTADO.md`
+- `GUIA_USUARIO_IMPLEMENTADO.md`
+
+---
+
+## **v1.22** - Correção de Consistência de Status (15/01/2026)
+
+### 🚨 **Bug Fix Crítico**
+
+**Problema:** O resumo no topo do Dashboard ("Acima da Meta", "Próximo da Meta", "Abaixo da Meta") estava usando lógica antiga que NÃO respeitava a direção (`HIGHER_BETTER` vs `LOWER_BETTER`) dos indicadores.
+
+**Sintoma:** Os números do Dashboard não batiam com as cores dos cards individuais.
+
+**Solução Implementada:**
+
+1. **Nova função em `src/utils/indicators.ts`:**
+   - Criada `getIndicatorStatus()` para retornar apenas a cor do status
+   - Versão simplificada de `calculateIndicatorStatus()` para uso em filtros
+
+2. **Refatoração do `src/pages/Dashboard.tsx`:**
+   - Cálculo de `stats` agora usa `reduce` com `getIndicatorStatus()`
+   - Respeita a direção de cada indicador (HIGHER_BETTER, LOWER_BETTER)
+   - Substituiu `aboveTarget`, `nearTarget`, `belowTarget` por `success`, `warning`, `danger`
+   - Atualizou labels: "Acima/Dentro da Meta", "Abaixo/Fora da Meta"
+
+3. **Centralização da Lógica:**
+   - Dashboard e KPICard agora usam a MESMA função base
+   - Única fonte de verdade para cálculos de status
+   - Consistência total garantida
+
+**Impacto:**
+- ✅ Números do Dashboard agora batem EXATAMENTE com as cores dos cards
+- ✅ Indicadores `LOWER_BETTER` (Churn, Despesas) contabilizados corretamente
+- ✅ Sistema consistente e confiável
+- ✅ Manutenibilidade melhorada (lógica centralizada)
+
+**Arquivos Modificados:**
+- `src/utils/indicators.ts` (nova função `getIndicatorStatus`)
+- `src/pages/Dashboard.tsx` (refatoração do cálculo de estatísticas)
+
+**Documentação Criada:**
+- `CORRECAO_CONSISTENCIA_STATUS.md`
+
+---
+
+## **v1.23** - Correção de Bug de Reativação (15/01/2026)
+
+### 🐛 **Bug Fix: Sincronização após Exclusão**
+
+**Problema:** Usuário excluía um indicador (soft delete: `is_active = false`), mas ao tentar adicionar novamente pela Loja, recebia erro "Indicador já adicionado".
+
+**Causa Raiz:** A função `handleAddToDashboard` na Store tentava fazer `INSERT` de um novo registro, mas já existia um registro inativo no banco. Isso violava o constraint `UNIQUE (user_id, indicator_template_id)`.
+
+**Solução Implementada:**
+
+1. **Verificação Prévia:**
+   - Antes de inserir, verifica se já existe um registro (ativo ou inativo)
+   - Usa `maybeSingle()` para não lançar erro se não existir
+
+2. **Lógica de Reativação:**
+   - Se existe registro inativo: Faz `UPDATE` para `is_active = true` (reativa)
+   - Se existe registro ativo: Mostra toast "Já está ativo"
+   - Se não existe: Faz `INSERT` de novo registro
+
+3. **UX Melhorada:**
+   - Toast específico: "Indicador reativado!"
+   - Navegação automática para Dashboard após reativação
+   - Logs de debug para troubleshooting
+
+**Fluxo Corrigido:**
+```
+Remover → is_active = false → Dashboard esconde
+Adicionar novamente → UPDATE is_active = true → Dashboard mostra
+```
+
+**Benefícios:**
+- ✅ Usuário pode adicionar/remover indicadores livremente
+- ✅ Histórico de dados preservado (soft delete)
+- ✅ Respeita constraints do banco
+- ✅ Menos registros duplicados
+
+**Arquivos Modificados:**
+- `src/pages/Store.tsx` (função `handleAddToDashboard`)
+
+**Documentação Criada:**
+- `CORRECAO_BUG_REATIVACAO.md`
+
+---
+
+## **v1.24** - Correção de Carregamento de Campos de Configuração (15/01/2026)
+
+### 🔧 **Bug Fix: Campos de Configuração Vazios ao Editar**
+
+**Problema:** Ao editar um indicador existente no `EditTemplateModal`, os campos de configuração (`direction`, `unit_type`, `calc_method`, `default_warning_threshold`, `default_critical_threshold`) apareciam vazios ou com valores default, mesmo tendo dados salvos no banco.
+
+**Exemplo:** Indicador "Churn" com `direction = "LOWER_BETTER"` no banco, mas ao editar, o dropdown "Direção" aparecia vazio ou com "HIGHER_BETTER".
+
+**Solução Implementada:**
+
+1. **Logs de Debug Detalhados:**
+   - Adicionados `console.log` no `useEffect` para rastrear valores vindos do banco
+   - Logs antes e depois de cada `setState`
+   - Facilita troubleshooting e validação
+
+2. **Garantia de Valores Default:**
+   - Variáveis intermediárias para garantir valores não-null
+   - `const directionValue = template.direction || "HIGHER_BETTER"`
+   - Evita que campos fiquem `undefined`
+
+3. **Conversão Explícita de Tipos:**
+   - Thresholds convertidos de `numeric` para `string` para inputs
+   - `.toString()` explícito para evitar problemas de tipo
+
+**Código Corrigido (useEffect):**
+```typescript
+const directionValue = template.direction || "HIGHER_BETTER";
+const unitTypeValue = template.unit_type || "integer";
+const calcMethodValue = template.calc_method || "formula";
+
+console.log('✅ Setando valores:');
+console.log('  - direction → ', directionValue);
+
+setDirection(directionValue);
+setUnitType(unitTypeValue);
+setCalcMethod(calcMethodValue);
+setDefaultWarningThreshold(template.default_warning_threshold?.toString() || "");
+setDefaultCriticalThreshold(template.default_critical_threshold?.toString() || "");
+```
+
+**Benefícios:**
+- ✅ Campos carregam com valores corretos do banco
+- ✅ Logs facilitam debug e validação
+- ✅ Valores default evitam campos vazios
+- ✅ Admin pode editar com confiança
+
+**Arquivos Modificados:**
+- `src/components/store/EditTemplateModal.tsx` (useEffect de carregamento)
+
+**Documentação Criada:**
+- `CORRECAO_CARREGAMENTO_CAMPOS.md`
+
+---
+
+## **v1.25** - Correção Crítica de Query de Templates (15/01/2026)
+
+### 🚨 **Bug Fix CRÍTICO: Perda de Dados na Edição**
+
+**Problema:** Ao clicar em "Editar Template", os campos de configuração (`direction`, `unit_type`, `calc_method`, `default_warning_threshold`, `default_critical_threshold`) chegavam como `undefined` no modal, mesmo tendo dados salvos no banco.
+
+**Causa Raiz:** O código estava usando um objeto `indicator` mapeado (interface local `Indicator`) que **descartava** os campos novos durante o mapeamento. O mapeamento nas linhas 240-250 criava um novo objeto incluindo apenas os campos da interface `Indicator`, perdendo todos os outros campos vindos do banco.
+
+**Fluxo do Bug:**
+```
+1. Query busca * (todos os campos) ✅
+2. Mapeamento cria objeto Indicator ❌ (descarta campos novos)
+3. Clicar Editar usa objeto mapeado ❌ (campos já perdidos)
+4. Modal recebe dados incompletos ❌ (direction: undefined)
+```
+
+**Solução Implementada:**
+
+**Nova Query ao Editar:**
+- Em vez de usar o objeto `indicator` mapeado, faz uma **nova query ao banco** ao clicar em "Editar"
+- Busca o template completo com `.select('*').eq('id', indicator.id).single()`
+- Garante que TODOS os campos estão disponíveis
+
+**Código Corrigido:**
+```typescript
+onClick={async (e) => {
+  e.stopPropagation();
+  
+  // 🔧 CORREÇÃO: Buscar template completo do banco
+  const { data: fullTemplate, error } = await supabase
+    .from('indicator_templates')
+    .select('*')
+    .eq('id', indicator.id)
+    .single();
+  
+  if (error) {
+    console.error('Erro ao buscar template completo:', error);
+    toast({ title: "Erro", description: "Não foi possível carregar o template." });
+    return;
+  }
+  
+  console.log('📦 Template completo carregado:', fullTemplate);
+  setEditingTemplate(fullTemplate);  // ✅ Objeto completo
+  setShowEditTemplateModal(true);
+}}
+```
+
+**Benefícios:**
+- ✅ Modal recebe dados completos e atualizados do banco
+- ✅ Não perde configurações salvas
+- ✅ Escalável para novos campos no futuro
+- ✅ Query adicional é rápida (busca por PK)
+- ✅ Separação clara: listagem usa interface simplificada, edição usa dados completos
+
+**Logs de Debug:**
+- Adicionado log `📦 Template completo carregado` para confirmar sucesso
+- Facilita validação e troubleshooting
+
+**Arquivos Modificados:**
+- `src/pages/Store.tsx` (botão de Editar, linhas 561-586)
+
+**Documentação Criada:**
+- `CORRECAO_CRITICA_QUERY_TEMPLATES.md`
+
+---
+
+## **v1.26** - Validação da Arquitetura de Fonte da Verdade (15/01/2026)
+
+### 🏗️ **Documentação de Arquitetura: Source of Truth**
+
+**Objetivo:** Documentar e validar que o sistema já implementa corretamente o padrão "Fonte da Verdade" para indicadores.
+
+**Princípio Fundamental:**
+> **Template é Master, User Indicator é Instância**
+
+**Responsabilidades:**
+- `indicator_templates` = **Definição Master** (O QUE medir e COMO calcular)
+- `user_indicators` = **Instância do Usuário** (Dados pessoais e resultados)
+
+**Validações Realizadas:**
+
+1. **Query de Busca:**
+   - ✅ Dashboard busca: `.select('*, template:indicator_templates(*)')`
+   - ✅ JOIN automático traz TODOS os campos do template
+   - ✅ Atualização na v1.26: Mudado de `select` específico para `select('*')` no template
+
+2. **Uso no Código:**
+   - ✅ KPICard usa `kpi.template?.direction` (não `kpi.direction`)
+   - ✅ EditKPIModal usa `kpi.template?.formula` (não `kpi.formula`)
+   - ✅ EditKPIModal usa `kpi.template?.input_fields` (não `kpi.input_fields`)
+   - ✅ Cálculo de status usa `template.direction`
+
+3. **Separação de Dados:**
+   ```
+   Template (Admin controla):
+   - formula, direction, unit_type
+   - input_fields, calc_method
+   - default_warning_threshold, default_critical_threshold
+   
+   User Indicator (Usuário controla):
+   - name (personalizado), target_value (meta pessoal)
+   - current_value, last_inputs
+   - format, position, segment
+   ```
+
+**Benefício Real:**
+```
+Quando Admin atualiza fórmula/regras no template:
+→ Usuário recarrega Dashboard
+→ Nova fórmula/regras aplicadas automaticamente ✅
+→ Sem necessidade de remover e adicionar indicador ✅
+```
+
+**Arquivos Modificados:**
+- `src/pages/Dashboard.tsx` (query otimizada para buscar `template:indicator_templates(*)`)
+
+**Documentação Criada:**
+- `ARQUITETURA_FONTE_VERDADE.md` (Documento completo de arquitetura)
+
+**Checklist de Conformidade:**
+- [x] Query expande relacionamento com template
+- [x] Código usa `template.*` para dados master
+- [x] Código usa dados raiz apenas para instância do usuário
+- [x] user_indicators não duplica dados do template
+- [x] Atualizações no template refletem imediatamente
+- [x] Arquitetura escalável e manutenível
+
+---
+
+## **v1.27** - Correção Crítica de Thresholds do Template (15/01/2026)
+
+### 🚨 **Bug Fix CRÍTICO: Thresholds Ignorados**
+
+**Problema Reportado:** Admin edita template, muda `default_critical_threshold` de 5% para 35%, mas Dashboard continua calculando status com 5% (valor antigo).
+
+**Causa Raiz:** A função `calculateIndicatorStatus` estava usando **percentuais fixos hardcoded** (80%, 120%) em vez dos **thresholds salvos no template** pelo admin.
+
+**Código Problemático:**
+```typescript
+// ANTES (ERRADO)
+if (value >= target * 0.8) {  // ❌ 80% FIXO!
+  return { color: 'warning' };
+}
+```
+
+**Fluxo do Bug:**
+```
+1. Admin edita threshold → Salva no banco ✅
+2. Dashboard busca template → Traz dados ✅
+3. Componente passa para função → NÃO passava thresholds ❌
+4. Função calcula status → Usava 80%/120% fixos ❌
+5. Card exibe cor errada ❌
+```
+
+**Solução Implementada:**
+
+1. **Função Atualizada:**
+   - Adicionados parâmetros opcionais: `warningThreshold`, `criticalThreshold`
+   - Lógica usa thresholds do template quando fornecidos
+   - Fallback para percentuais fixos se não fornecidos
+   ```typescript
+   export function calculateIndicatorStatus(
+     value: number,
+     target: number,
+     direction: IndicatorDirection = 'HIGHER_BETTER',
+     warningThreshold?: number | null,      // 🔧 NOVO
+     criticalThreshold?: number | null      // 🔧 NOVO
+   ): IndicatorStatus {
+     const warning = warningThreshold ?? (target * 0.8);  // Usa threshold ou fallback
+     const critical = criticalThreshold ?? target;
+     
+     if (value >= critical) return { color: 'success' };  // Usa threshold!
+     if (value >= warning) return { color: 'warning' };
+     return { color: 'danger' };
+   }
+   ```
+
+2. **Componentes Atualizados:**
+   ```typescript
+   // KPICard.tsx
+   const warningThreshold = kpi.template?.default_warning_threshold;
+   const criticalThreshold = kpi.template?.default_critical_threshold;
+   const status = calculateIndicatorStatus(value, target, direction, warningThreshold, criticalThreshold);
+   ```
+
+3. **Interface Atualizada:**
+   - Adicionados campos `default_warning_threshold` e `default_critical_threshold` na interface `KPI.template`
+
+**Benefícios:**
+- ✅ Admin controla thresholds no template
+- ✅ Mudanças refletem imediatamente no Dashboard (ao recarregar)
+- ✅ Status (cores) calculado corretamente
+- ✅ Flexibilidade por indicador
+
+**Exemplo Real:**
+```
+Food Cost:
+- Admin define: critical = 35%, warning = 30%
+- Usuário tem: value = 150%
+- ANTES: 150 >= 5*0.8 (4)? → Verde (errado!)
+- DEPOIS: 150 >= 35? → Verde (correto!) ✅
+```
+
+**Arquivos Modificados:**
+- `src/utils/indicators.ts` (funções `calculateIndicatorStatus` e `getIndicatorStatus`)
+- `src/components/dashboard/KPICard.tsx` (busca e passa thresholds)
+- `src/pages/Dashboard.tsx` (busca e passa thresholds para stats)
+
+**Documentação Criada:**
+- `CORRECAO_THRESHOLDS_TEMPLATE.md`
+- `SINCRONIZACAO_META_TEMPLATE.md`
+
+### 🎯 **Ajuste: Meta do Modal/Dashboard alinhada ao Template quando não há meta pessoal**
+
+**Problema:** o modal de lançamento e o Dashboard exibiam a meta do usuário (`user_indicators.target_value`). Se o usuário tinha meta antiga (ex: 5) e o admin atualizou a meta padrão do template (ex: 34.98), o modal continuava mostrando a meta antiga.
+
+**Correção:** quando `target_value` do usuário estiver `NULL`, o Dashboard passa a usar como meta **o `template.default_critical_threshold`**. Além disso, no modal foi adicionado um atalho **“Usar meta do Admin”** quando houver divergência.
+
+**Arquivos alterados:**
+- `src/pages/Dashboard.tsx` (resolve target: `target_value ?? template.default_critical_threshold ?? 0`)
+- `src/pages/Store.tsx` (reativação passa a re-sincronizar target se estava vazio/0)
+- `src/components/dashboard/EditKPIModal.tsx` (exibe “Meta padrão do Admin” e botão “Usar meta do Admin”)
+
+**Instruções para Usuário:**
+- Fazer **Hard Refresh** (Ctrl+Shift+R) após atualização
+- Recarregar Dashboard para ver mudanças
+
+### 🔄 **Feature: Sincronização de Meta com Template**
+
+**Implementação:** Meta inicial do usuário agora sincroniza com `default_critical_threshold` do template ao adicionar indicador.
+
+**Como Funciona:**
+1. **Ao adicionar indicador:**
+   - Sistema copia `default_critical_threshold` do template
+   - Salva em `target_value` do usuário
+   - Usuário começa com meta sensata (definida pelo admin)
+
+2. **Alerta ao editar:**
+   - Ao clicar no campo "Meta", aparece toast:
+   - "⚠️ Meta Pessoal: Se você alterar a meta, ela será sua meta pessoal e não será afetada por mudanças do administrador no template."
+   - Duração: 5 segundos
+
+3. **Independência:**
+   - Usuário pode personalizar meta se quiser
+   - Meta pessoal não muda quando admin atualiza template
+   - Status (cores) sempre usa thresholds do template
+
+**Exemplo:**
+```
+Template: default_critical_threshold = 34.98
+Usuário adiciona → target_value = 34.98 (cópia)
+Usuário edita para 40 → target_value = 40 (pessoal)
+Admin muda para 50 → Status usa 50, meta continua 40
+```
+
+**Arquivos Modificados:**
+- `src/pages/Store.tsx` (copia threshold ao adicionar)
+- `src/components/dashboard/EditKPIModal.tsx` (alerta onFocus)
+
+**Documentação Criada:**
+- `SINCRONIZACAO_META_TEMPLATE.md`
+
+---
+
+**Última atualização:** 15/01/2026
+**Versão Atual:** v1.27
 **Mantido por:** Equipe de Desenvolvimento
 

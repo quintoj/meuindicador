@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import AddTemplateModal from "@/components/store/AddTemplateModal";
 import EditTemplateModal from "@/components/store/EditTemplateModal";
+import AdminHelpGuide from "@/components/admin/AdminHelpGuide";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface Indicator {
@@ -59,8 +60,11 @@ const getIcon = (iconName: string | null) => {
   return iconMap[iconName] || Building;
 };
 
-// Email do admin - altere para o seu email
-const ADMIN_EMAIL = "admin@meugestor.com";
+// Emails de admin - aceita ambos os emails (antigo e novo)
+const ADMIN_EMAILS = [
+  "admin@meuindicador.com",
+  "admin@meugestor.com"  // Email antigo mantido para compatibilidade
+];
 
 const Store = () => {
   const [selectedSegment, setSelectedSegment] = useState("Todos");
@@ -71,7 +75,7 @@ const Store = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
   const [showEditTemplateModal, setShowEditTemplateModal] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [editingTemplate, setEditingTemplate] = useState<Tables<'indicator_templates'> | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -188,7 +192,8 @@ const Store = () => {
   useEffect(() => {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email === ADMIN_EMAIL) {
+      // Verifica se o email está na lista de admins
+      if (user?.email && ADMIN_EMAILS.includes(user.email)) {
         setIsAdmin(true);
       }
     };
@@ -325,6 +330,58 @@ const Store = () => {
         return;
       }
 
+      // 🔧 CORREÇÃO: Verificar se já existe um registro inativo (soft deleted)
+      const { data: existingIndicator } = await (supabase as any)
+        .from('user_indicators')
+        .select('id, is_active, target_value')
+        .eq('user_id', user.id)
+        .eq('indicator_template_id', templateData.id)
+        .maybeSingle();
+
+      // Se existe um registro inativo, reativá-lo em vez de inserir novo
+      if (existingIndicator && !existingIndicator.is_active) {
+        console.log('♻️ Reativando indicador existente:', existingIndicator.id);
+        
+        // 🔧 Se o usuário não tinha meta pessoal, re-sincroniza com a meta padrão do template (admin)
+        const shouldSyncTarget =
+          existingIndicator.target_value === null ||
+          existingIndicator.target_value === undefined ||
+          Number(existingIndicator.target_value) === 0;
+
+        const { error: updateError } = await (supabase as any)
+          .from('user_indicators')
+          .update({
+            is_active: true,
+            ...(shouldSyncTarget ? { target_value: templateData.default_critical_threshold || null } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingIndicator.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        toast({
+          title: "Indicador reativado!",
+          description: `${indicator.name} foi adicionado novamente ao seu dashboard.`,
+        });
+
+        navigate("/dashboard");
+        setAddingIndicator(null);
+        return;
+      }
+
+      // Se já existe e está ativo, avisar o usuário
+      if (existingIndicator && existingIndicator.is_active) {
+        toast({
+          variant: "destructive",
+          title: "Indicador já adicionado",
+          description: "Este indicador já está ativo no seu dashboard.",
+        });
+        setAddingIndicator(null);
+        return;
+      }
+
       // Determinar o formato baseado no nome ou segmento
       let format: "currency" | "percentage" | "number" = "number";
       const nameLower = indicator.name.toLowerCase();
@@ -334,7 +391,17 @@ const Store = () => {
         format = "currency";
       }
 
-      // Inserir o indicador na tabela user_indicators
+      // 🔧 v1.27: Sincronizar meta inicial com threshold do template
+      // Copia default_critical_threshold do template como meta inicial do usuário
+      const initialTarget = templateData.default_critical_threshold || null;
+      
+      console.log('📦 Adicionando indicador com meta inicial do template:', {
+        template_name: templateData.name,
+        default_critical_threshold: templateData.default_critical_threshold,
+        initial_target: initialTarget
+      });
+
+      // Inserir novo indicador na tabela user_indicators
       const { data, error } = await (supabase as any)
         .from('user_indicators')
         .insert({
@@ -342,7 +409,7 @@ const Store = () => {
           indicator_template_id: templateData.id,
           name: templateData.name,
           current_value: 0,
-          target_value: null,
+          target_value: initialTarget,  // 🔧 Meta inicial sincronizada!
           format: format,
           segment: templateData.segment || 'Geral',
           icon_name: templateData.icon_name,
@@ -353,13 +420,14 @@ const Store = () => {
         .single();
 
       if (error) {
-        // Verificar se é erro de duplicata
+        // Verificar se é erro de duplicata (não deveria acontecer mais)
         if (error.code === '23505' || error.message.includes('unique')) {
           toast({
             variant: "destructive",
             title: "Indicador já adicionado",
             description: "Este indicador já está no seu dashboard.",
           });
+          setAddingIndicator(null);
           return;
         }
 
@@ -405,24 +473,12 @@ const Store = () => {
         onSuccess={fetchIndicators}
       />
 
-      {editingTemplate && (
-        <EditTemplateModal
-          open={showEditTemplateModal}
-          onOpenChange={setShowEditTemplateModal}
-          onSuccess={fetchIndicators}
-          templateId={editingTemplate.id}
-          initialData={{
-            name: editingTemplate.name,
-            description: editingTemplate.description,
-            formula: editingTemplate.formula,
-            importance: editingTemplate.importance,
-            segment: editingTemplate.segment,
-            complexity: editingTemplate.complexity,
-            icon_name: editingTemplate.icon_name || "",
-            required_data: editingTemplate.required_data || [],
-          }}
-        />
-      )}
+      <EditTemplateModal
+        open={showEditTemplateModal}
+        onOpenChange={setShowEditTemplateModal}
+        template={editingTemplate}
+        onSuccess={fetchIndicators}
+      />
 
       <div className="container mx-auto px-4 py-8">
         {/* Store Header */}
@@ -432,13 +488,16 @@ const Store = () => {
             <p className="text-muted-foreground">Escolha os KPIs perfeitos para o seu segmento e comece a monitorar agora mesmo</p>
           </div>
           {isAdmin && (
-            <Button
-              onClick={() => setShowAddTemplateModal(true)}
-              className="bg-gradient-primary text-white hover:opacity-90"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Template
-            </Button>
+            <div className="flex items-center space-x-3">
+              <AdminHelpGuide />
+              <Button
+                onClick={() => setShowAddTemplateModal(true)}
+                className="bg-gradient-primary text-white hover:opacity-90"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Template
+              </Button>
+            </div>
           )}
         </div>
 
@@ -506,6 +565,11 @@ const Store = () => {
                             <div>
                               <CardTitle className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {indicator.name}
+                                {(indicator as any).is_system_template && (
+    <span className="ml-2 inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary-foreground ring-1 ring-inset ring-primary/10">
+    Padrão do Sistema
+  </span>
+)}
                               </CardTitle>
                               <Badge variant="secondary" className="mt-1">
                                 {indicator.segment}
@@ -521,9 +585,27 @@ const Store = () => {
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation();
-                                  setEditingTemplate(indicator);
+                                  // 🔧 CORREÇÃO: Buscar template completo do banco com TODOS os campos
+                                  const { data: fullTemplate, error } = await supabase
+                                    .from('indicator_templates')
+                                    .select('*')
+                                    .eq('id', indicator.id)
+                                    .single();
+                                  
+                                  if (error) {
+                                    console.error('Erro ao buscar template completo:', error);
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Erro",
+                                      description: "Não foi possível carregar o template.",
+                                    });
+                                    return;
+                                  }
+                                  
+                                  console.log('📦 Template completo carregado:', fullTemplate);
+                                  setEditingTemplate(fullTemplate);
                                   setShowEditTemplateModal(true);
                                 }}
                                 title="Editar Template (Admin)"

@@ -47,7 +47,7 @@ const Index = () => {
             <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-foreground">Meu Gestor</span>
+            <span className="text-xl font-bold text-foreground">Meu Indicador</span>
           </div>
           <div className="flex items-center space-x-4">
             <Link to="/dashboard">
@@ -93,7 +93,7 @@ const Index = () => {
               <div className="absolute inset-0 bg-gradient-primary rounded-3xl opacity-10 blur-3xl transform scale-105"></div>
               <img 
                 src={heroDashboard} 
-                alt="Dashboard do Meu Gestor mostrando indicadores de performance com status visual intuitivo"
+                alt="Dashboard do Meu Indicador mostrando indicadores de performance com status visual intuitivo"
                 className="relative w-full rounded-3xl shadow-custom-xl border border-border/50"
               />
             </div>
@@ -166,7 +166,7 @@ const Index = () => {
               Comece a gerenciar hoje mesmo
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Junte-se a centenas de empresas que já transformaram sua gestão com o Meu Gestor.
+              Junte-se a centenas de empresas que já transformaram sua gestão com o Meu Indicador.
             </p>
             <Link to="/dashboard">
               <Button size="lg" className="bg-gradient-primary text-white hover:opacity-90 px-8 py-6 text-lg">
@@ -184,10 +184,10 @@ const Index = () => {
             <div className="w-6 h-6 bg-gradient-primary rounded flex items-center justify-center">
               <BarChart3 className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-foreground">Meu Gestor</span>
+            <span className="font-semibold text-foreground">Meu Indicador</span>
           </div>
           <p className="text-muted-foreground">
-            © 2024 Meu Gestor. Transformando dados em crescimento.
+            © 2024 Meu Indicador. Transformando dados em crescimento.
           </p>
         </div>
       </footer>
