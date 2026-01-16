@@ -36,7 +36,7 @@ const Header = ({
         // Buscar perfil do usuário na tabela user_profiles
         const { data: profile, error } = await (supabase as any)
           .from('user_profiles')
-          .select('full_name, business_name')
+          .select('*')
           .eq('id', user.id)
           .single();
 

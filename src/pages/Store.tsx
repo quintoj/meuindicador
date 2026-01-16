@@ -193,8 +193,18 @@ const Store = () => {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       // Verifica se o email está na lista de admins
-      if (user?.email && ADMIN_EMAILS.includes(user.email)) {
-        setIsAdmin(true);
+      if (user) {
+        // 1. Vai no banco buscar o cargo real do usuário
+        const { data: profile } = await supabase
+          .from('user_profiles') // Confirme se o nome da sua tabela é 'profiles' ou 'user_profiles'
+          .select('role')
+          .eq('id', user.id)
+          .single();
+      
+        // 2. Verifica se é Admin (aceita maiúsculo ou minúsculo)
+        if (profile?.role === 'ADMIN' || profile?.role === 'admin') {
+          setIsAdmin(true);
+        }
       }
     };
     checkAdmin();
