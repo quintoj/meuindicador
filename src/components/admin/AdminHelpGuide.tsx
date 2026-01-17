@@ -10,15 +10,15 @@ const AdminHelpGuide = () => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="border-primary/20 hover:bg-primary/5"
         >
           <BookOpen className="w-4 h-4 mr-2" />
           Manual do Admin
         </Button>
       </DialogTrigger>
-      
+
       <DialogContent className="max-w-4xl max-h-[90vh] p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
@@ -51,7 +51,7 @@ const AdminHelpGuide = () => {
                     🔒 Variável Fixa (Fixed)
                   </h4>
                   <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                    Dados que <strong>não mudam durante o mês</strong> ou período. 
+                    Dados que <strong>não mudam durante o mês</strong> ou período.
                     <br />Exemplos: Metragem do estabelecimento, Quantidade de funcionários, Meta mensal.
                   </p>
                   <p className="mt-2 text-xs text-blue-700 dark:text-blue-500 font-medium">
@@ -92,7 +92,7 @@ const AdminHelpGuide = () => {
                         Para: Vendas, Faturamento, Lucro, NPS, Taxa de Retenção
                       </p>
                       <div className="mt-2 p-2 bg-white dark:bg-gray-900 rounded text-xs">
-                        <strong>Lógica:</strong> Se Resultado {'>='} Meta = <span className="text-green-600 font-bold">🟢 Verde</span> | 
+                        <strong>Lógica:</strong> Se Resultado {'>='} Meta = <span className="text-green-600 font-bold">🟢 Verde</span> |
                         Se {'<'} Meta = <span className="text-red-600 font-bold">🔴 Vermelho</span>
                       </div>
                     </div>
@@ -107,7 +107,7 @@ const AdminHelpGuide = () => {
                         Para: Churn, Inadimplência, Despesas, Custo de Aquisição (CAC)
                       </p>
                       <div className="mt-2 p-2 bg-white dark:bg-gray-900 rounded text-xs">
-                        <strong>Lógica:</strong> Se Resultado {'<='} Meta = <span className="text-green-600 font-bold">🟢 Verde</span> | 
+                        <strong>Lógica:</strong> Se Resultado {'<='} Meta = <span className="text-green-600 font-bold">🟢 Verde</span> |
                         Se {'>'} Meta = <span className="text-red-600 font-bold">🔴 Vermelho</span>
                       </div>
                     </div>
@@ -208,7 +208,7 @@ const AdminHelpGuide = () => {
                         <strong>Causa:</strong> Divisão invertida na fórmula ou unidade errada.
                       </p>
                       <p className="text-xs text-green-700 dark:text-green-500 mt-1">
-                        <strong>✅ Solução:</strong> Verifique se a fórmula está <code>(cancelamentos / ativos)</code> e não <code>(ativos / cancelamentos)</code>. 
+                        <strong>✅ Solução:</strong> Verifique se a fórmula está <code>(cancelamentos / ativos)</code> e não <code>(ativos / cancelamentos)</code>.
                         Confirme se a unidade está correta (% vs número).
                       </p>
                     </div>
@@ -224,7 +224,7 @@ const AdminHelpGuide = () => {
                         <strong>Causa:</strong> A variável foi criada como "Diário" quando deveria ser "Fixo".
                       </p>
                       <p className="text-xs text-green-700 dark:text-green-500 mt-1">
-                        <strong>✅ Solução:</strong> Edite o template e mude a variável de "Diário" para "Fixo". 
+                        <strong>✅ Solução:</strong> Edite o template e mude a variável de "Diário" para "Fixo".
                         Campos fixos mantêm o valor entre lançamentos.
                       </p>
                     </div>
@@ -255,8 +255,8 @@ const AdminHelpGuide = () => {
                         <strong>Causa:</strong> Seu email não está cadastrado como admin no sistema.
                       </p>
                       <p className="text-xs text-green-700 dark:text-green-500 mt-1">
-                        <strong>✅ Solução:</strong> Verifique se está logado com <code>admin@meuindicador.com</code> ou <code>admin@meugestor.com</code>. 
-                        Se precisar adicionar outro email, atualize a constante ADMIN_EMAILS no código.
+                        <strong>✅ Solução:</strong> Verifique se está logado com uma conta que tenha <code>role='ADMIN'</code> na tabela <code>user_profiles</code> do banco de dados.
+                        Apenas administradores podem criar e editar templates.
                       </p>
                     </div>
                   </div>

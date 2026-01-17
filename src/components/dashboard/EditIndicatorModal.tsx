@@ -8,12 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Edit, Trash2, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
-// Emails de admin - aceita ambos os emails (antigo e novo)
-const ADMIN_EMAILS = [
-  "admin@meuindicador.com",
-  "admin@meugestor.com"  // Email antigo mantido para compatibilidade
-];
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,9 +49,39 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
   // Verificar se é admin
   useEffect(() => {
     const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      // Verifica se o email está na lista de admins
-      setIsAdmin(user?.email ? ADMIN_EMAILS.includes(user.email) : false);
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError) {
+          console.error('❌ [EditIndicator] Erro ao buscar usuário:', userError);
+          setIsAdmin(false);
+          return;
+        }
+
+        if (!user) {
+          setIsAdmin(false);
+          return;
+        }
+
+        // Buscar o role do perfil do usuário
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) {
+          console.error('❌ [EditIndicator] Erro ao buscar perfil:', profileError);
+          setIsAdmin(false);
+          return;
+        }
+
+        console.log('🔐 [EditIndicator] Role:', profile?.role);
+        setIsAdmin(profile?.role === 'ADMIN');
+      } catch (err) {
+        console.error('💥 [EditIndicator] Erro inesperado:', err);
+        setIsAdmin(false);
+      }
     };
     checkAdmin();
   }, []);
@@ -92,7 +116,7 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
 
       // Obter usuário autenticado
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         toast({
           variant: "destructive",
@@ -126,7 +150,7 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
 
       onOpenChange(false);
       onUpdate();
-      
+
     } catch (err: any) {
       console.error('Erro ao atualizar indicador:', err);
       toast({
@@ -144,7 +168,7 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
       setDeleting(true);
 
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         toast({
           variant: "destructive",
@@ -177,7 +201,7 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
       setShowDeleteDialog(false);
       onOpenChange(false);
       onUpdate();
-      
+
     } catch (err: any) {
       console.error('Erro ao remover indicador:', err);
       toast({
@@ -279,11 +303,11 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-semibold">{name || "Nome do Indicador"}</span>
                     <span className="text-xl font-bold text-primary">
-                      {format === "currency" 
+                      {format === "currency"
                         ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(kpi.value)
                         : format === "percentage"
-                        ? `${kpi.value.toFixed(1)}%`
-                        : kpi.value.toLocaleString('pt-BR')}
+                          ? `${kpi.value.toFixed(1)}%`
+                          : kpi.value.toLocaleString('pt-BR')}
                     </span>
                   </div>
                 </div>

@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
+import {
   Search, Plus, Info, Edit,
-  Dumbbell, UtensilsCrossed, Calculator, 
-  PawPrint, Building, DollarSign, Users, 
+  Dumbbell, UtensilsCrossed, Calculator,
+  PawPrint, Building, DollarSign, Users,
   Percent, TrendingUp, Target, Clock,
   ShoppingCart, Heart, Award, Loader2
 } from "lucide-react";
@@ -60,12 +60,6 @@ const getIcon = (iconName: string | null) => {
   return iconMap[iconName] || Building;
 };
 
-// Emails de admin - aceita ambos os emails (antigo e novo)
-const ADMIN_EMAILS = [
-  "admin@meuindicador.com",
-  "admin@meugestor.com"  // Email antigo mantido para compatibilidade
-];
-
 const Store = () => {
   const [selectedSegment, setSelectedSegment] = useState("Todos");
   const [searchTerm, setSearchTerm] = useState("");
@@ -91,7 +85,7 @@ const Store = () => {
       required_data: ["Lista de clientes", "Status do contrato", "Data de vencimento"]
     },
     {
-      id: "aca_02", name: "Taxa de Evasão", segment: "Academia", 
+      id: "aca_02", name: "Taxa de Evasão", segment: "Academia",
       description: "Percentual de clientes que cancelaram em relação ao total de ativos",
       formula: "(Cancelamentos no período / Clientes ativos) × 100",
       importance: "Mede a retenção de clientes e indica problemas na qualidade do serviço",
@@ -101,7 +95,7 @@ const Store = () => {
     {
       id: "aca_03", name: "Check-ins por Cliente", segment: "Academia",
       description: "Média de visitas mensais por cliente ativo",
-      formula: "Total de check-ins no mês / Número de clientes ativos", 
+      formula: "Total de check-ins no mês / Número de clientes ativos",
       importance: "Indica o engajamento dos clientes e uso efetivo da academia",
       complexity: "Fácil", icon: Target,
       required_data: ["Registro de check-ins", "Clientes ativos", "Período"]
@@ -145,7 +139,7 @@ const Store = () => {
     {
       id: "pet_02", name: "Taxa de Recompra", segment: "PetShop",
       description: "Percentual de clientes que retornam para novas compras",
-      formula: "(Clientes que compraram novamente / Total de clientes) × 100", 
+      formula: "(Clientes que compraram novamente / Total de clientes) × 100",
       importance: "Indica fidelização dos clientes e qualidade dos produtos/serviços",
       complexity: "Intermediário", icon: Heart,
       required_data: ["Histórico de compras", "Clientes únicos", "Período de análise"]
@@ -179,7 +173,7 @@ const Store = () => {
       required_data: ["Gastos com marketing", "Novos clientes", "Período"]
     },
     {
-      id: "gen_02", name: "LTV - Lifetime Value", segment: "Geral", 
+      id: "gen_02", name: "LTV - Lifetime Value", segment: "Geral",
       description: "Valor total que um cliente gera durante todo relacionamento",
       formula: "Ticket médio × Frequência × Tempo de vida",
       importance: "Fundamental para estratégias de retenção e investimento em clientes",
@@ -191,20 +185,46 @@ const Store = () => {
   // Verificar se é admin
   useEffect(() => {
     const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      // Verifica se o email está na lista de admins
-      if (user) {
-        // 1. Vai no banco buscar o cargo real do usuário
-        const { data: profile } = await supabase
-          .from('user_profiles') // Confirme se o nome da sua tabela é 'profiles' ou 'user_profiles'
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError) {
+          console.error('❌ Erro ao buscar usuário:', userError);
+          setIsAdmin(false);
+          return;
+        }
+
+        if (!user) {
+          console.log('⚠️ Nenhum usuário autenticado');
+          setIsAdmin(false);
+          return;
+        }
+
+        console.log('👤 Usuário autenticado:', user.id);
+
+        // Buscar o role do perfil do usuário
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
           .select('role')
           .eq('id', user.id)
           .single();
-      
-        // 2. Verifica se é Admin (aceita maiúsculo ou minúsculo)
-        if (profile?.role === 'ADMIN' || profile?.role === 'admin') {
-          setIsAdmin(true);
+
+        if (profileError) {
+          console.error('❌ Erro ao buscar perfil:', profileError);
+          setIsAdmin(false);
+          return;
         }
+
+        console.log('📊 Perfil carregado:', profile);
+        console.log('🔐 Role encontrado:', profile?.role);
+
+        // Verifica se o role é ADMIN
+        const adminStatus = profile?.role === 'ADMIN';
+        console.log('✅ isAdmin:', adminStatus);
+        setIsAdmin(adminStatus);
+      } catch (err) {
+        console.error('💥 Erro inesperado ao verificar admin:', err);
+        setIsAdmin(false);
       }
     };
     checkAdmin();
@@ -223,47 +243,47 @@ const Store = () => {
         .select('*')
         .order('name');
 
-        if (error) {
-          console.error('Erro ao buscar indicadores:', error);
-          // Usar dados estáticos como fallback em caso de erro
-          setIndicators(staticIndicators);
-          return;
-        }
+      if (error) {
+        console.error('Erro ao buscar indicadores:', error);
+        // Usar dados estáticos como fallback em caso de erro
+        setIndicators(staticIndicators);
+        return;
+      }
 
-        if (data && data.length > 0) {
-          // Mapear dados do Supabase para o formato esperado
-          const mappedIndicators: Indicator[] = data.map((item: Tables<'indicator_templates'>) => {
-            // Processar required_data que pode ser JSONB
-            let requiredDataArray: string[] = [];
-            if (item.required_data) {
-              if (Array.isArray(item.required_data)) {
-                requiredDataArray = item.required_data as string[];
-              } else if (typeof item.required_data === 'string') {
-                try {
-                  requiredDataArray = JSON.parse(item.required_data);
-                } catch {
-                  requiredDataArray = [];
-                }
+      if (data && data.length > 0) {
+        // Mapear dados do Supabase para o formato esperado
+        const mappedIndicators: Indicator[] = data.map((item: Tables<'indicator_templates'>) => {
+          // Processar required_data que pode ser JSONB
+          let requiredDataArray: string[] = [];
+          if (item.required_data) {
+            if (Array.isArray(item.required_data)) {
+              requiredDataArray = item.required_data as string[];
+            } else if (typeof item.required_data === 'string') {
+              try {
+                requiredDataArray = JSON.parse(item.required_data);
+              } catch {
+                requiredDataArray = [];
               }
             }
+          }
 
-            return {
-              id: String(item.id), // Converter UUID para string
-              name: item.name || '',
-              description: item.description || '',
-              formula: item.formula || '',
-              importance: item.importance || '',
-              segment: item.segment || 'Geral',
-              complexity: (item.complexity || 'Fácil') as "Fácil" | "Intermediário" | "Avançado",
-              icon: getIcon(item.icon_name),
-              required_data: requiredDataArray
-            };
-          });
-          setIndicators(mappedIndicators);
-        } else {
-          // Tabela vazia, usar dados estáticos como fallback
-          setIndicators(staticIndicators);
-        }
+          return {
+            id: String(item.id), // Converter UUID para string
+            name: item.name || '',
+            description: item.description || '',
+            formula: item.formula || '',
+            importance: item.importance || '',
+            segment: item.segment || 'Geral',
+            complexity: (item.complexity || 'Fácil') as "Fácil" | "Intermediário" | "Avançado",
+            icon: getIcon(item.icon_name),
+            required_data: requiredDataArray
+          };
+        });
+        setIndicators(mappedIndicators);
+      } else {
+        // Tabela vazia, usar dados estáticos como fallback
+        setIndicators(staticIndicators);
+      }
     } catch (err) {
       console.error('Erro inesperado ao buscar indicadores:', err);
       // Usar dados estáticos como fallback em caso de erro
@@ -293,14 +313,14 @@ const Store = () => {
   const filteredIndicators = indicators.filter(indicator => {
     const matchesSegment = selectedSegment === "Todos" || indicator.segment === selectedSegment;
     const matchesSearch = indicator.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         indicator.description.toLowerCase().includes(searchTerm.toLowerCase());
+      indicator.description.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSegment && matchesSearch;
   });
 
   const getComplexityColor = (complexity: string) => {
     switch (complexity) {
       case "Fácil": return "bg-success/10 text-success border-success/20";
-      case "Intermediário": return "bg-warning/10 text-warning border-warning/20"; 
+      case "Intermediário": return "bg-warning/10 text-warning border-warning/20";
       case "Avançado": return "bg-danger/10 text-danger border-danger/20";
       default: return "bg-muted/10 text-muted-foreground border-muted/20";
     }
@@ -310,10 +330,10 @@ const Store = () => {
   const handleAddToDashboard = async (indicator: Indicator) => {
     try {
       setAddingIndicator(indicator.id);
-      
+
       // Obter usuário autenticado
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         toast({
           variant: "destructive",
@@ -351,7 +371,7 @@ const Store = () => {
       // Se existe um registro inativo, reativá-lo em vez de inserir novo
       if (existingIndicator && !existingIndicator.is_active) {
         console.log('♻️ Reativando indicador existente:', existingIndicator.id);
-        
+
         // 🔧 Se o usuário não tinha meta pessoal, re-sincroniza com a meta padrão do template (admin)
         const shouldSyncTarget =
           existingIndicator.target_value === null ||
@@ -404,7 +424,7 @@ const Store = () => {
       // 🔧 v1.27: Sincronizar meta inicial com threshold do template
       // Copia default_critical_threshold do template como meta inicial do usuário
       const initialTarget = templateData.default_critical_threshold || null;
-      
+
       console.log('📦 Adicionando indicador com meta inicial do template:', {
         template_name: templateData.name,
         default_critical_threshold: templateData.default_critical_threshold,
@@ -476,7 +496,7 @@ const Store = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <Header showBackButton={true} />
-      
+
       <AddTemplateModal
         open={showAddTemplateModal}
         onOpenChange={setShowAddTemplateModal}
@@ -576,10 +596,10 @@ const Store = () => {
                               <CardTitle className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {indicator.name}
                                 {(indicator as any).is_system_template && (
-    <span className="ml-2 inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary-foreground ring-1 ring-inset ring-primary/10">
-    Padrão do Sistema
-  </span>
-)}
+                                  <span className="ml-2 inline-flex items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary-foreground ring-1 ring-inset ring-primary/10">
+                                    Padrão do Sistema
+                                  </span>
+                                )}
                               </CardTitle>
                               <Badge variant="secondary" className="mt-1">
                                 {indicator.segment}
@@ -603,7 +623,7 @@ const Store = () => {
                                     .select('*')
                                     .eq('id', indicator.id)
                                     .single();
-                                  
+
                                   if (error) {
                                     console.error('Erro ao buscar template completo:', error);
                                     toast({
@@ -613,7 +633,7 @@ const Store = () => {
                                     });
                                     return;
                                   }
-                                  
+
                                   console.log('📦 Template completo carregado:', fullTemplate);
                                   setEditingTemplate(fullTemplate);
                                   setShowEditTemplateModal(true);
@@ -668,7 +688,7 @@ const Store = () => {
                           </div>
                         </div>
 
-                        <Button 
+                        <Button
                           className="w-full bg-gradient-primary text-white hover:opacity-90 mt-4"
                           onClick={() => handleAddToDashboard(indicator)}
                           disabled={addingIndicator === indicator.id}

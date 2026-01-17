@@ -14,18 +14,30 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password || (!isLogin && !fullName)) {
       toast({
         variant: "destructive",
         title: "Campos obrigatórios",
         description: "Por favor, preencha todos os campos.",
+      });
+      return;
+    }
+
+    // Validação de confirmação de senha no cadastro
+    if (!isLogin && password !== confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "Senhas não coincidem",
+        description: "A senha e a confirmação de senha devem ser iguais.",
       });
       return;
     }
@@ -51,7 +63,7 @@ const Auth = () => {
 
         if (error) {
           let errorMessage = "Erro ao fazer login. Tente novamente.";
-          
+
           if (error.message.includes("Invalid login credentials")) {
             errorMessage = "Email ou senha incorretos.";
           } else if (error.message.includes("Email not confirmed")) {
@@ -89,7 +101,7 @@ const Auth = () => {
 
         if (error) {
           let errorMessage = "Erro ao criar conta. Tente novamente.";
-          
+
           if (error.message.includes("User already registered")) {
             errorMessage = "Este email já está cadastrado. Faça login ou use outro email.";
           } else if (error.message.includes("Password should be at least")) {
@@ -124,8 +136,54 @@ const Auth = () => {
           setIsLogin(true);
           setFullName("");
           setPassword("");
+          setConfirmPassword("");
         }
       }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Erro inesperado",
+        description: "Ocorreu um erro inesperado. Tente novamente mais tarde.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!email) {
+      toast({
+        variant: "destructive",
+        title: "Email obrigatório",
+        description: "Por favor, insira seu email.",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/update-password`,
+      });
+
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao enviar email",
+          description: "Não foi possível enviar o email de recuperação. Tente novamente.",
+        });
+        return;
+      }
+
+      toast({
+        title: "Email enviado!",
+        description: "Verifique sua caixa de entrada para redefinir sua senha.",
+      });
+      setIsForgotPassword(false);
+      setEmail("");
     } catch (err) {
       toast({
         variant: "destructive",
@@ -157,120 +215,206 @@ const Auth = () => {
               {isLogin ? "Bem-vindo de volta" : "Criar conta"}
             </CardTitle>
             <CardDescription>
-              {isLogin 
-                ? "Entre com sua conta para acessar o dashboard" 
+              {isLogin
+                ? "Entre com sua conta para acessar o dashboard"
                 : "Crie sua conta gratuita e comece a gerenciar seus indicadores"}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={isLogin ? "login" : "signup"} onValueChange={(value) => setIsLogin(value === "login")}>
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="signup">Cadastro</TabsTrigger>
-              </TabsList>
+            {isForgotPassword ? (
+              // Forgot Password Form
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </div>
 
-              <TabsContent value={isLogin ? "login" : "signup"}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {!isLogin && (
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-primary text-white hover:opacity-90"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    "Enviar email de recuperação"
+                  )}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setEmail("");
+                  }}
+                  disabled={loading}
+                >
+                  Voltar ao login
+                </Button>
+              </form>
+            ) : (
+              // Login/Signup Forms
+              <Tabs value={isLogin ? "login" : "signup"} onValueChange={(value) => setIsLogin(value === "login")}>
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="login">Login</TabsTrigger>
+                  <TabsTrigger value="signup">Cadastro</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value={isLogin ? "login" : "signup"}>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    {!isLogin && (
+                      <div className="space-y-2">
+                        <Label htmlFor="fullName">Nome Completo</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                          <Input
+                            id="fullName"
+                            type="text"
+                            placeholder="Seu nome completo"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            className="pl-10"
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
-                      <Label htmlFor="fullName">Nome Completo</Label>
+                      <Label htmlFor="email">Email</Label>
                       <div className="relative">
-                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                         <Input
-                          id="fullName"
-                          type="text"
-                          placeholder="Seu nome completo"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
+                          id="email"
+                          type="email"
+                          placeholder="seu@email.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
                           className="pl-10"
                           disabled={loading}
                           required
                         />
                       </div>
                     </div>
-                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10"
-                        disabled={loading}
-                        required
-                      />
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Senha</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                        <Input
+                          id="password"
+                          type="password"
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pl-10"
+                          disabled={loading}
+                          required
+                          minLength={6}
+                        />
+                      </div>
+                      {!isLogin && (
+                        <p className="text-xs text-muted-foreground">
+                          A senha deve ter pelo menos 6 caracteres
+                        </p>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Senha</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10"
-                        disabled={loading}
-                        required
-                        minLength={6}
-                      />
-                    </div>
                     {!isLogin && (
-                      <p className="text-xs text-muted-foreground">
-                        A senha deve ter pelo menos 6 caracteres
-                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                          <Input
+                            id="confirmPassword"
+                            type="password"
+                            placeholder="••••••••"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="pl-10"
+                            disabled={loading}
+                            required
+                            minLength={6}
+                          />
+                        </div>
+                      </div>
                     )}
-                  </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full bg-gradient-primary text-white hover:opacity-90"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {isLogin ? "Entrando..." : "Criando conta..."}
-                      </>
-                    ) : (
-                      isLogin ? "Entrar" : "Criar conta"
+                    {isLogin && (
+                      <div className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => setIsForgotPassword(true)}
+                          className="text-sm text-primary hover:underline"
+                          disabled={loading}
+                        >
+                          Esqueci minha senha
+                        </button>
+                      </div>
                     )}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
 
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              {isLogin ? (
-                <p>
-                  Não tem uma conta?{" "}
-                  <button
-                    onClick={() => setIsLogin(false)}
-                    className="text-primary hover:underline font-medium"
-                  >
-                    Cadastre-se
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Já tem uma conta?{" "}
-                  <button
-                    onClick={() => setIsLogin(true)}
-                    className="text-primary hover:underline font-medium"
-                  >
-                    Faça login
-                  </button>
-                </p>
-              )}
-            </div>
+                    <Button
+                      type="submit"
+                      className="w-full bg-gradient-primary text-white hover:opacity-90"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {isLogin ? "Entrando..." : "Criando conta..."}
+                        </>
+                      ) : (
+                        isLogin ? "Entrar" : "Criar conta"
+                      )}
+                    </Button>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            )}
+
+            {!isForgotPassword && (
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                {isLogin ? (
+                  <p>
+                    Não tem uma conta?{" "}
+                    <button
+                      onClick={() => setIsLogin(false)}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      Cadastre-se
+                    </button>
+                  </p>
+                ) : (
+                  <p>
+                    Já tem uma conta?{" "}
+                    <button
+                      onClick={() => setIsLogin(true)}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      Faça login
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
