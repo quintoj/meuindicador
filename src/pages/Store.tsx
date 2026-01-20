@@ -360,9 +360,6 @@ const Store = () => {
         return;
       }
 
-      // 🔍 DEBUG: Log completo do template vindo do banco
-      console.log('🔍 TEMPLATE COMPLETO DO BANCO:', JSON.stringify(templateData, null, 2));
-
       // 🔧 CORREÇÃO: Verificar se já existe um registro inativo (soft deleted)
       const { data: existingIndicator } = await (supabase as any)
         .from('user_indicators')
