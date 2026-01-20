@@ -48,24 +48,25 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
   const [segment, setSegment] = useState<string>("Geral");
   const [complexity, setComplexity] = useState<string>("Fácil");
   const [iconName, setIconName] = useState("");
-  
+
   // Novos campos
   const [direction, setDirection] = useState<string>("HIGHER_BETTER");
   const [unitType, setUnitType] = useState<string>("integer");
   const [calcMethod, setCalcMethod] = useState<string>("formula");
+  const [defaultTarget, setDefaultTarget] = useState<string>("");
   const [defaultWarningThreshold, setDefaultWarningThreshold] = useState<string>("");
   const [defaultCriticalThreshold, setDefaultCriticalThreshold] = useState<string>("");
-  
+
   // Gerenciador de Variáveis
   const [variables, setVariables] = useState<Variable[]>([]);
   const [newVarName, setNewVarName] = useState("");
   const [newVarType, setNewVarType] = useState<'fixed' | 'daily'>('fixed');
-  
+
   const [loading, setLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
-  
+
   const formulaTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Carregar dados do template ao abrir
@@ -76,9 +77,10 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
       console.log('  - direction:', template.direction);
       console.log('  - unit_type:', template.unit_type);
       console.log('  - calc_method:', template.calc_method);
+      console.log('  - default_target:', template.default_target);
       console.log('  - default_warning_threshold:', template.default_warning_threshold);
       console.log('  - default_critical_threshold:', template.default_critical_threshold);
-      
+
       setName(template.name || "");
       setDescription(template.description || "");
       setFormula(template.formula || "");
@@ -86,69 +88,70 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
       setSegment(template.segment || "Geral");
       setComplexity(template.complexity || "Fácil");
       setIconName(template.icon_name || "");
-      
+
       // 🔧 CORREÇÃO: Garantir valores default corretos e conversão de ENUMs
       const directionValue = template.direction || "HIGHER_BETTER";
       const unitTypeValue = template.unit_type || "integer";
       const calcMethodValue = template.calc_method || "formula";
-      
+
       console.log('✅ Setando valores:');
       console.log('  - direction → ', directionValue);
       console.log('  - unit_type → ', unitTypeValue);
       console.log('  - calc_method → ', calcMethodValue);
-      
+
       setDirection(directionValue);
       setUnitType(unitTypeValue);
       setCalcMethod(calcMethodValue);
+      setDefaultTarget(template.default_target?.toString() || "");
       setDefaultWarningThreshold(template.default_warning_threshold?.toString() || "");
       setDefaultCriticalThreshold(template.default_critical_threshold?.toString() || "");
-      
+
       // 🔥 PARSE de input_fields (JSONB)
       let loadedVariables: Variable[] = [];
-      
+
       if (template.input_fields) {
         try {
           let inputFieldsJSON: any;
-          
+
           if (typeof template.input_fields === 'string') {
             inputFieldsJSON = JSON.parse(template.input_fields);
           } else {
             inputFieldsJSON = template.input_fields;
           }
-          
+
           const fixed = Array.isArray(inputFieldsJSON.fixed) ? inputFieldsJSON.fixed : [];
           const daily = Array.isArray(inputFieldsJSON.daily) ? inputFieldsJSON.daily : [];
-          
+
           loadedVariables = [
             ...fixed.map((name: string) => ({ name, type: 'fixed' as const })),
             ...daily.map((name: string) => ({ name, type: 'daily' as const })),
           ];
-          
+
           console.log('✅ Variáveis carregadas de input_fields:', loadedVariables);
         } catch (err) {
           console.error('❌ Erro ao parsear input_fields:', err);
         }
       }
-      
+
       // Fallback: required_data (antigo)
       if (loadedVariables.length === 0 && template.required_data) {
         try {
           let requiredDataArray: string[] = [];
-          
+
           if (Array.isArray(template.required_data)) {
             requiredDataArray = template.required_data;
           } else if (typeof template.required_data === 'string') {
             const parsed = JSON.parse(template.required_data);
             requiredDataArray = Array.isArray(parsed) ? parsed : [];
           }
-          
+
           loadedVariables = requiredDataArray.map(name => ({ name, type: 'fixed' as const }));
           console.log('⚠️ Usando fallback required_data:', loadedVariables);
         } catch (err) {
           console.error('❌ Erro ao parsear required_data:', err);
         }
       }
-      
+
       setVariables(loadedVariables);
     }
   }, [open, template]);
@@ -172,7 +175,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
     }
 
     const snakeCaseName = toSnakeCase(newVarName);
-    
+
     if (variables.some(v => v.name === snakeCaseName)) {
       toast({
         variant: "destructive",
@@ -184,7 +187,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
 
     setVariables([...variables, { name: snakeCaseName, type: newVarType }]);
     setNewVarName("");
-    
+
     toast({
       title: "Variável adicionada!",
       description: `"${snakeCaseName}" (${newVarType === 'fixed' ? 'Fixo' : 'Diário'})`,
@@ -203,9 +206,9 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
     const end = textarea.selectionEnd;
     const currentFormula = formula;
 
-    const newFormula = 
-      currentFormula.substring(0, start) + 
-      varName + 
+    const newFormula =
+      currentFormula.substring(0, start) +
+      varName +
       currentFormula.substring(end);
 
     setFormula(newFormula);
@@ -225,6 +228,17 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
           variant: "destructive",
           title: "Campos obrigatórios",
           description: "Por favor, preencha Nome, Descrição, Fórmula e Importância.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Validação: Meta é obrigatória
+      if (!defaultTarget) {
+        toast({
+          variant: "destructive",
+          title: "Meta obrigatória",
+          description: "Por favor, defina a Meta (100%) do indicador.",
         });
         setLoading(false);
         return;
@@ -260,6 +274,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
           direction: direction,
           unit_type: unitType,
           calc_method: calcMethod.trim(),
+          default_target: defaultTarget ? parseFloat(defaultTarget) : null,
           default_warning_threshold: defaultWarningThreshold ? parseFloat(defaultWarningThreshold) : null,
           default_critical_threshold: defaultCriticalThreshold ? parseFloat(defaultCriticalThreshold) : null,
           input_fields: inputFields,
@@ -345,7 +360,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
 
       if (error) {
         console.error('Erro detalhado ao deletar:', error.message || error);
-        
+
         if (error.code === '42501' || error.message?.includes('permission')) {
           toast({
             variant: "destructive",
@@ -377,7 +392,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
       setShowDeleteDialog(false);
       onOpenChange(false);
       onSuccess();
-      
+
     } catch (err: any) {
       console.error('Erro detalhado:', err.message || err);
       toast({
@@ -557,7 +572,25 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
                 </div>
 
                 {/* Thresholds (Metas Padrão) */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label htmlFor="defaultTarget" className="flex items-center space-x-2">
+                      <span>🎯 Meta (100%) *</span>
+                    </Label>
+                    <Input
+                      id="defaultTarget"
+                      type="number"
+                      step="0.01"
+                      value={defaultTarget}
+                      onChange={(e) => setDefaultTarget(e.target.value)}
+                      placeholder="Ex: 100 ou valor ideal"
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Valor ideal que representa 100% da meta
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="warningThreshold" className="flex items-center space-x-2">
                       <span>⚠️ Meta de Alerta</span>
@@ -568,12 +601,12 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
                       step="0.01"
                       value={defaultWarningThreshold}
                       onChange={(e) => setDefaultWarningThreshold(e.target.value)}
-                      placeholder="Ex: 5 (para Churn 5%)"
+                      placeholder="Ex: 80 (80% da meta)"
                       disabled={loading}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {direction === 'LOWER_BETTER' 
-                        ? 'Valores acima disso ficam amarelos' 
+                      {direction === 'LOWER_BETTER'
+                        ? 'Valores acima disso ficam amarelos'
                         : 'Valores abaixo disso ficam amarelos'}
                     </p>
                   </div>
@@ -588,12 +621,12 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
                       step="0.01"
                       value={defaultCriticalThreshold}
                       onChange={(e) => setDefaultCriticalThreshold(e.target.value)}
-                      placeholder="Ex: 8 (para Churn 8%)"
+                      placeholder="Ex: 60 (60% da meta)"
                       disabled={loading}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {direction === 'LOWER_BETTER' 
-                        ? 'Valores acima disso ficam vermelhos' 
+                      {direction === 'LOWER_BETTER'
+                        ? 'Valores acima disso ficam vermelhos'
                         : 'Valores abaixo disso ficam vermelhos'}
                     </p>
                   </div>
@@ -645,8 +678,8 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
                     <Label className="text-sm font-semibold">Variáveis Criadas ({variables.length})</Label>
                     <div className="flex flex-wrap gap-2">
                       {variables.map((variable, index) => (
-                        <Badge 
-                          key={index} 
+                        <Badge
+                          key={index}
                           variant={variable.type === 'fixed' ? 'default' : 'secondary'}
                           className="text-sm px-3 py-1"
                         >

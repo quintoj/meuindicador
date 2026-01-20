@@ -36,22 +36,23 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
   const [segment, setSegment] = useState<string>("Geral");
   const [complexity, setComplexity] = useState<string>("Fácil");
   const [iconName, setIconName] = useState("");
-  
+
   // ===== NOVOS CAMPOS =====
   const [direction, setDirection] = useState<string>("HIGHER_BETTER");
   const [unitType, setUnitType] = useState<string>("integer");
   const [calcMethod, setCalcMethod] = useState<string>("formula");
+  const [defaultTarget, setDefaultTarget] = useState<string>("");
   const [defaultWarningThreshold, setDefaultWarningThreshold] = useState<string>("");
   const [defaultCriticalThreshold, setDefaultCriticalThreshold] = useState<string>("");
-  
+
   // Gerenciador de Variáveis
   const [variables, setVariables] = useState<Variable[]>([]);
   const [newVarName, setNewVarName] = useState("");
   const [newVarType, setNewVarType] = useState<'fixed' | 'daily'>('fixed');
-  
+
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  
+
   // Ref para o textarea da fórmula (para inserir variáveis na posição do cursor)
   const formulaTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,7 +76,7 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
     }
 
     const snakeCaseName = toSnakeCase(newVarName);
-    
+
     // Verificar duplicata
     if (variables.some(v => v.name === snakeCaseName)) {
       toast({
@@ -88,7 +89,7 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
 
     setVariables([...variables, { name: snakeCaseName, type: newVarType }]);
     setNewVarName("");
-    
+
     toast({
       title: "Variável adicionada!",
       description: `"${snakeCaseName}" (${newVarType === 'fixed' ? 'Fixo' : 'Diário'})`,
@@ -109,9 +110,9 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
     const currentFormula = formula;
 
     // Inserir na posição do cursor
-    const newFormula = 
-      currentFormula.substring(0, start) + 
-      varName + 
+    const newFormula =
+      currentFormula.substring(0, start) +
+      varName +
       currentFormula.substring(end);
 
     setFormula(newFormula);
@@ -134,6 +135,7 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
     setDirection("HIGHER_BETTER");
     setUnitType("integer");
     setCalcMethod("formula");
+    setDefaultTarget("");
     setDefaultWarningThreshold("");
     setDefaultCriticalThreshold("");
     setVariables([]);
@@ -150,6 +152,16 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
           variant: "destructive",
           title: "Campos obrigatórios",
           description: "Por favor, preencha Nome, Descrição, Fórmula e Importância.",
+        });
+        return;
+      }
+
+      // Validação: Meta é obrigatória
+      if (!defaultTarget) {
+        toast({
+          variant: "destructive",
+          title: "Meta obrigatória",
+          description: "Por favor, defina a Meta (100%) do indicador.",
         });
         return;
       }
@@ -174,6 +186,7 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
           direction: direction,
           unit_type: unitType,
           calc_method: calcMethod.trim(),
+          default_target: defaultTarget ? parseFloat(defaultTarget) : null,
           default_warning_threshold: defaultWarningThreshold ? parseFloat(defaultWarningThreshold) : null,
           default_critical_threshold: defaultCriticalThreshold ? parseFloat(defaultCriticalThreshold) : null,
           input_fields: inputFields,
@@ -430,7 +443,25 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
               </div>
 
               {/* Thresholds (Metas Padrão) */}
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                <div className="space-y-2">
+                  <Label htmlFor="defaultTarget" className="flex items-center space-x-2">
+                    <span>🎯 Meta (100%) *</span>
+                  </Label>
+                  <Input
+                    id="defaultTarget"
+                    type="number"
+                    step="0.01"
+                    value={defaultTarget}
+                    onChange={(e) => setDefaultTarget(e.target.value)}
+                    placeholder="Ex: 100 ou valor ideal"
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Valor ideal que representa 100% da meta
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="warningThreshold" className="flex items-center space-x-2">
                     <span>⚠️ Meta de Alerta</span>
@@ -441,12 +472,12 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
                     step="0.01"
                     value={defaultWarningThreshold}
                     onChange={(e) => setDefaultWarningThreshold(e.target.value)}
-                    placeholder="Ex: 5 (para Churn 5%)"
+                    placeholder="Ex: 80 (80% da meta)"
                     disabled={loading}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {direction === 'LOWER_BETTER' 
-                      ? 'Valores acima disso ficam amarelos' 
+                    {direction === 'LOWER_BETTER'
+                      ? 'Valores acima disso ficam amarelos'
                       : 'Valores abaixo disso ficam amarelos'}
                   </p>
                 </div>
@@ -461,12 +492,12 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
                     step="0.01"
                     value={defaultCriticalThreshold}
                     onChange={(e) => setDefaultCriticalThreshold(e.target.value)}
-                    placeholder="Ex: 8 (para Churn 8%)"
+                    placeholder="Ex: 60 (60% da meta)"
                     disabled={loading}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {direction === 'LOWER_BETTER' 
-                      ? 'Valores acima disso ficam vermelhos' 
+                    {direction === 'LOWER_BETTER'
+                      ? 'Valores acima disso ficam vermelhos'
                       : 'Valores abaixo disso ficam vermelhos'}
                   </p>
                 </div>
@@ -521,8 +552,8 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
                   <Label className="text-sm font-semibold">Variáveis Criadas ({variables.length})</Label>
                   <div className="flex flex-wrap gap-2">
                     {variables.map((variable, index) => (
-                      <Badge 
-                        key={index} 
+                      <Badge
+                        key={index}
                         variant={variable.type === 'fixed' ? 'default' : 'secondary'}
                         className="text-sm px-3 py-1"
                       >

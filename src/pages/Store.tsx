@@ -360,6 +360,9 @@ const Store = () => {
         return;
       }
 
+      // 🔍 DEBUG: Log completo do template vindo do banco
+      console.log('🔍 TEMPLATE COMPLETO DO BANCO:', JSON.stringify(templateData, null, 2));
+
       // 🔧 CORREÇÃO: Verificar se já existe um registro inativo (soft deleted)
       const { data: existingIndicator } = await (supabase as any)
         .from('user_indicators')
@@ -372,17 +375,22 @@ const Store = () => {
       if (existingIndicator && !existingIndicator.is_active) {
         console.log('♻️ Reativando indicador existente:', existingIndicator.id);
 
-        // 🔧 Se o usuário não tinha meta pessoal, re-sincroniza com a meta padrão do template (admin)
-        const shouldSyncTarget =
-          existingIndicator.target_value === null ||
-          existingIndicator.target_value === undefined ||
-          Number(existingIndicator.target_value) === 0;
+        // 🎯 SEMPRE sincroniza com a meta padrão do template ao reativar
+        // Isso garante que mudanças na meta do admin sejam aplicadas
+        const newTarget = templateData.default_target ?? templateData.default_critical_threshold ?? null;
+
+        console.log('📦 Sincronizando meta ao reativar:', {
+          old_target: existingIndicator.target_value,
+          new_target: newTarget,
+          default_target: templateData.default_target,
+          default_critical_threshold: templateData.default_critical_threshold
+        });
 
         const { error: updateError } = await (supabase as any)
           .from('user_indicators')
           .update({
             is_active: true,
-            ...(shouldSyncTarget ? { target_value: templateData.default_critical_threshold || null } : {}),
+            target_value: newTarget,  // 🎯 Sempre atualiza para a meta do template
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingIndicator.id);
@@ -421,12 +429,12 @@ const Store = () => {
         format = "currency";
       }
 
-      // 🔧 v1.27: Sincronizar meta inicial com threshold do template
-      // Copia default_critical_threshold do template como meta inicial do usuário
-      const initialTarget = templateData.default_critical_threshold || null;
+      // 🎯 Sincronizar meta inicial com default_target do template (com fallback para default_critical_threshold)
+      const initialTarget = templateData.default_target ?? templateData.default_critical_threshold ?? null;
 
       console.log('📦 Adicionando indicador com meta inicial do template:', {
         template_name: templateData.name,
+        default_target: templateData.default_target,
         default_critical_threshold: templateData.default_critical_threshold,
         initial_target: initialTarget
       });

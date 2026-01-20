@@ -3,16 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Target, 
-  TrendingUp, 
-  Users, 
-  DollarSign, 
-  Percent, 
-  Calendar, 
-  Loader2, 
-  BarChart3, 
-  Plus, 
+import {
+  Target,
+  TrendingUp,
+  Users,
+  DollarSign,
+  Percent,
+  Calendar,
+  Loader2,
+  BarChart3,
+  Plus,
   Dumbbell,
   Clock,
   PawPrint,
@@ -52,6 +52,9 @@ interface KPI {
     calc_method: string;
     direction: string;
     unit_type: string;
+    default_target?: number | null;
+    default_warning_threshold?: number | null;
+    default_critical_threshold?: number | null;
   };
 }
 
@@ -85,19 +88,19 @@ const getIcon = (iconName: string | null): LucideIcon => {
   if (!iconName || iconName.trim() === '') {
     return HelpCircle;
   }
-  
+
   // Normaliza o nome do ícone (remove espaços, capitaliza primeira letra)
   const normalizedName = iconName.trim();
-  
+
   // Verifica se o ícone existe no mapa
   const icon = iconMap[normalizedName];
-  
+
   // Se não encontrar, retorna HelpCircle como fallback seguro
   if (!icon) {
     console.warn(`Ícone "${iconName}" não encontrado no mapa. Usando HelpCircle como fallback.`);
     return HelpCircle;
   }
-  
+
   return icon;
 };
 
@@ -118,7 +121,7 @@ const Dashboard = () => {
       segment: "Geral"
     },
     {
-      id: "2", 
+      id: "2",
       name: "Ticket Médio",
       value: 127.50,
       target: 150,
@@ -149,7 +152,7 @@ const Dashboard = () => {
       name: "Margem Bruta",
       value: 34.2,
       target: 40,
-      format: "percentage" as const, 
+      format: "percentage" as const,
       icon: TrendingUp,
       segment: "Financeiro"
     },
@@ -168,10 +171,10 @@ const Dashboard = () => {
   const fetchUserIndicators = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Obter o usuário atual
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         console.log('Usuário não autenticado');
         setKpis([]);
@@ -198,31 +201,31 @@ const Dashboard = () => {
 
       if (data && data.length > 0) {
         console.log('Dados buscados do banco (com template):', data);
-        
+
         // Mapear dados do Supabase para o formato esperado
         const mappedKPIs: KPI[] = data.map((item: any) => {
-          // 🔧 Meta (Target): se o usuário não definiu (NULL), usar a meta padrão do template (admin)
+          // 🎯 Meta (Target): prioridade: 1) usuário, 2) default_target, 3) default_critical_threshold
           const userTargetRaw = item.target_value;
-          const templateDefaultTargetRaw = item.template?.default_critical_threshold;
+          const templateDefaultTargetRaw = item.template?.default_target ?? item.template?.default_critical_threshold;
           const resolvedTarget =
             userTargetRaw !== null && userTargetRaw !== undefined
               ? Number(userTargetRaw)
               : (templateDefaultTargetRaw !== null && templateDefaultTargetRaw !== undefined
-                  ? Number(templateDefaultTargetRaw)
-                  : 0);
+                ? Number(templateDefaultTargetRaw)
+                : 0);
 
           return {
-          id: String(item.id),
-          name: item.name || '',
-          value: Number(item.current_value) || 0,
-          target: resolvedTarget,
-          format: item.format || 'number',
-          icon: getIcon(item.icon_name),
-          segment: item.segment || 'Geral',
-          template: item.template || undefined // 👈 Incluir template no KPI
+            id: String(item.id),
+            name: item.name || '',
+            value: Number(item.current_value) || 0,
+            target: resolvedTarget,
+            format: item.format || 'number',
+            icon: getIcon(item.icon_name),
+            segment: item.segment || 'Geral',
+            template: item.template || undefined // 👈 Incluir template no KPI
           };
         });
-        
+
         console.log('KPIs mapeados (com template):', mappedKPIs);
         setKpis(mappedKPIs);
       } else {
@@ -256,13 +259,13 @@ const Dashboard = () => {
     const warningThreshold = kpi.template?.default_warning_threshold;
     const criticalThreshold = kpi.template?.default_critical_threshold;
     const status = getIndicatorStatus(kpi.value, kpi.target, direction, warningThreshold, criticalThreshold);
-    
+
     if (status === 'success') acc.success++;
     else if (status === 'warning') acc.warning++;
     else if (status === 'danger') acc.danger++;
-    
+
     return acc;
-  }, { 
+  }, {
     total: kpis.length,
     success: 0,  // Verde (Acima/Dentro da Meta)
     warning: 0,  // Amarelo (Próximo da Meta)
@@ -272,7 +275,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <Header 
+      <Header
         showAddButton={true}
         showSettings={true}
         title="Dashboard"
@@ -348,8 +351,8 @@ const Dashboard = () => {
               <h2 className="text-2xl font-semibold text-foreground">Seus Indicadores</h2>
               <div className="flex items-center space-x-2">
                 <UserHelpGuide />
-                <Input 
-                  placeholder="Buscar indicador..." 
+                <Input
+                  placeholder="Buscar indicador..."
                   className="w-64"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -380,8 +383,8 @@ const Dashboard = () => {
                       {searchTerm ? 'Nenhum indicador encontrado' : 'Bem-vindo ao Meu Indicador!'}
                     </h3>
                     <p className="text-muted-foreground mb-4">
-                      {searchTerm 
-                        ? 'Tente ajustar sua busca.' 
+                      {searchTerm
+                        ? 'Tente ajustar sua busca.'
                         : 'Você ainda não adicionou nenhum indicador. Comece visitando a Loja de Indicadores!'}
                     </p>
                     {!searchTerm && (

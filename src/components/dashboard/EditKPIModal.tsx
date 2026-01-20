@@ -28,6 +28,9 @@ interface KPI {
     calc_method: string;
     direction: string;
     unit_type: string;
+    default_target?: number | null;
+    default_warning_threshold?: number | null;
+    default_critical_threshold?: number | null;
   };
 }
 
@@ -87,13 +90,13 @@ const isNumericField = (field: string): boolean => {
 // Obter hint contextual para um campo
 const getFieldHint = (field: string): string => {
   const fieldLower = field.toLowerCase();
-  
+
   for (const [key, hint] of Object.entries(fieldHints)) {
     if (fieldLower.includes(key)) {
       return hint;
     }
   }
-  
+
   return "Insira o valor deste dado para o período selecionado";
 };
 
@@ -117,34 +120,34 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
   // ============================================
   // DERIVED STATE com useMemo - DEVE VIR ANTES DE TUDO!
   // ============================================
-  
+
   const { numericFields, textFields, showDynamicInputs } = useMemo(() => {
     console.log('🔍 ===== CALCULANDO CAMPOS (useMemo) =====');
     const template = kpi.template;
-    
+
     let dynamicFields: string[] = [];
-    
+
     // Extrair campos do input_fields (JSONB)
     if (template?.input_fields) {
       try {
         let inputFieldsJSON: any;
-        
+
         if (typeof template.input_fields === 'string') {
           inputFieldsJSON = JSON.parse(template.input_fields);
         } else {
           inputFieldsJSON = template.input_fields;
         }
-        
+
         const fixed = Array.isArray(inputFieldsJSON.fixed) ? inputFieldsJSON.fixed : [];
         const daily = Array.isArray(inputFieldsJSON.daily) ? inputFieldsJSON.daily : [];
         dynamicFields = [...fixed, ...daily];
-        
+
         console.log('✅ Campos de input_fields:', dynamicFields);
       } catch (err) {
         console.error('❌ Erro ao processar input_fields:', err);
       }
     }
-    
+
     // FALLBACK: required_data
     if (dynamicFields.length === 0 && template?.required_data) {
       try {
@@ -159,7 +162,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         console.error('❌ Erro ao processar required_data:', err);
       }
     }
-    
+
     // Filtrar campos
     const numeric = dynamicFields.filter(field => isNumericField(field));
     const text = dynamicFields.filter(field => isTextField(field));
@@ -167,7 +170,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
 
     console.log('✅ Resultado:', { numeric, text, showDynamic });
     console.log('=============================');
-    
+
     return {
       numericFields: numeric,
       textFields: text,
@@ -180,7 +183,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     if (open) {
       console.log('🔍 Modal aberto com KPI:', kpi);
       console.log('📊 Template Data:', kpi.template);
-      
+
       // Se o template já veio do Dashboard, usar diretamente
       if (kpi.template) {
         loadTemplateFromKPI();
@@ -188,7 +191,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         // Fallback: buscar template do banco
         fetchTemplateData();
       }
-      
+
       setActiveTab("manual");
       setQuickInput("");
     }
@@ -201,18 +204,19 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       const targetVal = kpi.target || 0;
       setTargetValue(targetVal.toString());
       console.log('📊 Meta carregada:', targetVal);
-      
+
       setRecordedDate(new Date().toISOString().split('T')[0]);
       setCalculatedResult(kpi.value || 0);
-      
+
       // 🔄 CARREGAR últimos inputs salvos (se existirem)
       loadLastInputs();
     }
   }, [open, kpi]);
 
+  // 🎯 Usar default_target como meta principal do Admin
   const templateDefaultTarget =
-    (kpi.template?.default_critical_threshold !== null && kpi.template?.default_critical_threshold !== undefined)
-      ? Number(kpi.template.default_critical_threshold)
+    (kpi.template?.default_target !== null && kpi.template?.default_target !== undefined)
+      ? Number(kpi.template.default_target)
       : null;
 
   // Carregar últimos inputs salvos do banco
@@ -238,33 +242,33 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
   // Carregar template a partir do KPI (que já veio do Dashboard)
   const loadTemplateFromKPI = () => {
     if (!kpi.template) return;
-    
+
     const template = kpi.template;
     console.log('✅ Usando template do KPI:', template);
-    
+
     setFormula(template.formula || '');
-    
+
     // PRIORIDADE 1: Usar input_fields (JSONB) se existir
     let dataArray: string[] = [];
     if (template.input_fields) {
       try {
-        const inputFields = typeof template.input_fields === 'string' 
-          ? JSON.parse(template.input_fields) 
+        const inputFields = typeof template.input_fields === 'string'
+          ? JSON.parse(template.input_fields)
           : template.input_fields;
-        
+
         console.log('📝 input_fields encontrado:', inputFields);
-        
+
         // Combinar campos fixed e daily
         const fixedFields = inputFields.fixed || [];
         const dailyFields = inputFields.daily || [];
         dataArray = [...fixedFields, ...dailyFields];
-        
+
         console.log('✅ Campos extraídos de input_fields:', dataArray);
       } catch (err) {
         console.error('❌ Erro ao processar input_fields:', err);
       }
     }
-    
+
     // FALLBACK: Usar required_data se input_fields não existir
     if (dataArray.length === 0 && template.required_data) {
       console.log('⚠️ Usando fallback: required_data');
@@ -279,10 +283,10 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         }
       }
     }
-    
+
     console.log('🎯 Campos finais para renderizar:', dataArray);
     setRequiredData(dataArray);
-    
+
     // Inicializar inputs dinâmicos
     const initialInputs: Record<string, string> = {};
     dataArray.forEach(field => {
@@ -294,7 +298,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
   const fetchTemplateData = async () => {
     try {
       setLoadingTemplate(true);
-      
+
       // Buscar o template do indicador através do user_indicator
       const { data: userIndicator } = await (supabase as any)
         .from('user_indicators')
@@ -312,28 +316,28 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         if (!error && template) {
           console.log('Template carregado:', template);
           setFormula(template.formula || '');
-          
+
           // PRIORIDADE 1: Usar input_fields (JSONB) se existir
           let dataArray: string[] = [];
           if (template.input_fields) {
             try {
-              const inputFields = typeof template.input_fields === 'string' 
-                ? JSON.parse(template.input_fields) 
+              const inputFields = typeof template.input_fields === 'string'
+                ? JSON.parse(template.input_fields)
                 : template.input_fields;
-              
+
               console.log('input_fields encontrado:', inputFields);
-              
+
               // Combinar campos fixed e daily
               const fixedFields = inputFields.fixed || [];
               const dailyFields = inputFields.daily || [];
               dataArray = [...fixedFields, ...dailyFields];
-              
+
               console.log('Campos extraídos de input_fields:', dataArray);
             } catch (err) {
               console.error('Erro ao processar input_fields:', err);
             }
           }
-          
+
           // FALLBACK: Usar required_data se input_fields não existir
           if (dataArray.length === 0 && template.required_data) {
             console.log('Usando fallback: required_data');
@@ -348,10 +352,10 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
               }
             }
           }
-          
+
           console.log('Campos finais para renderizar:', dataArray);
           setRequiredData(dataArray);
-          
+
           // Inicializar inputs dinâmicos
           const initialInputs: Record<string, string> = {};
           dataArray.forEach(field => {
@@ -380,7 +384,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     console.log('  - formula:', formula);
     console.log('  - numericFields:', numericFields);
     console.log('  - dynamicInputs:', dynamicInputs);
-    
+
     try {
       // Verificar se todos os campos numéricos foram preenchidos
       const allFilled = numericFields.every(field => {
@@ -398,21 +402,21 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
 
       // 🔥 CORREÇÃO CRÍTICA: Substituir variáveis POR NOME, não por índice
       let formulaProcessed = formula;
-      
+
       console.log('  📝 Substituindo variáveis na fórmula:');
       console.log('  - Fórmula ORIGINAL:', formula);
-      
+
       // Substituir cada variável pelo seu valor correspondente (pelo NOME)
       Object.entries(dynamicInputs).forEach(([fieldName, fieldValue]) => {
         const numericValue = parseFloat(fieldValue as string) || 0;
-        
+
         // Criar regex com word boundary para evitar substituições parciais
         // Ex: "ativos" não deve substituir "ativos_inicio"
         const regex = new RegExp(`\\b${fieldName}\\b`, 'gi');
-        
+
         // Contar quantas vezes a variável aparece na fórmula
         const matches = formulaProcessed.match(regex);
-        
+
         if (matches && matches.length > 0) {
           console.log(`    ✅ "${fieldName}" → ${numericValue} (encontrado ${matches.length}x)`);
           formulaProcessed = formulaProcessed.replace(regex, String(numericValue));
@@ -420,12 +424,12 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
           console.log(`    ⚠️ "${fieldName}" não encontrado na fórmula`);
         }
       });
-      
+
       console.log('  - Fórmula PROCESSADA:', formulaProcessed);
-      
+
       // Avaliar a expressão matemática
       const result = evaluateSafeExpression(formulaProcessed);
-      
+
       if (!isNaN(result) && isFinite(result)) {
         const rounded = Math.round(result * 100) / 100;
         console.log(`  ✅ RESULTADO FINAL: ${rounded}`);
@@ -445,7 +449,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     try {
       // Remove espaços e caracteres não numéricos/operadores
       expr = expr.replace(/[^0-9+\-*/().]/g, '');
-      
+
       // Usa Function para avaliar de forma mais segura que eval
       const result = Function('"use strict"; return (' + expr + ')')();
       return parseFloat(result);
@@ -466,10 +470,10 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
 
     // IA simples: extrai números do texto
     const numbers = quickInput.match(/\d+[.,]?\d*/g);
-    
+
     if (numbers && numbers.length > 0) {
       const normalizedNumbers = numbers.map(n => n.replace(',', '.'));
-      
+
       // Mapear números para campos na ordem (usar dynamicFields do derived state)
       const fieldsToFill = numericFields.length > 0 ? numericFields : Object.keys(dynamicInputs);
       const newInputs = { ...dynamicInputs };
@@ -478,10 +482,10 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
           newInputs[field] = normalizedNumbers[index];
         }
       });
-      
+
       setDynamicInputs(newInputs);
       setActiveTab("manual");
-      
+
       toast({
         title: "Dados extraídos!",
         description: `${numbers.length} valor(es) identificado(s) no texto.`,
@@ -502,14 +506,14 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       console.log('targetValue:', targetValue);
       console.log('dynamicInputs:', dynamicInputs);
       console.log('numericFields:', numericFields);
-      
+
       setLoading(true);
 
       let finalValue = calculatedResult;
       const targetValueNum = parseFloat(targetValue) || 0;
 
       console.log('numericFields (from derived state):', numericFields);
-      
+
       // Se não há campos numéricos (fallback manual), usar o valor digitado
       if (numericFields.length === 0) {
         // Modo manual: não há campos dinâmicos, usar calculatedResult diretamente
@@ -535,7 +539,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
           setLoading(false);
           return;
         }
-        
+
         // Se os campos estão preenchidos mas o resultado é 0, permitir salvar 0
         // (pode ser um indicador onde o resultado realmente é zero)
       }
@@ -550,13 +554,13 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         setLoading(false);
         return;
       }
-      
+
       console.log('Passou nas validações, finalValue:', finalValue);
 
       // Obter usuário autenticado
       console.log('Obtendo usuário...');
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         console.log('Erro: usuário não autenticado');
         toast({
@@ -573,7 +577,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       // 1. UPDATE na tabela user_indicators (incluindo last_inputs)
       console.log('Fazendo UPDATE em user_indicators...');
       console.log('💾 Salvando inputs para próxima vez:', dynamicInputs);
-      
+
       const { error: updateError } = await (supabase as any)
         .from('user_indicators')
         .update({
@@ -617,14 +621,14 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       // Limpar campos
       setDynamicInputs({});
       setQuickInput("");
-      
+
       console.log('Fechando modal e atualizando tela...');
       // Fechar modal e atualizar a tela
       onOpenChange(false);
       onSave();
-      
+
       console.log('=== SALVAMENTO CONCLUÍDO COM SUCESSO ===');
-      
+
     } catch (err: any) {
       console.error('Erro ao salvar indicador:', err);
       toast({
@@ -725,7 +729,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
                       <Info className="w-3 h-3 text-muted-foreground" />
                       <h4 className="text-xs font-medium text-muted-foreground">Informações Adicionais (opcional)</h4>
                     </div>
-                    
+
                     {textFields.map((field, index) => (
                       <div key={`text-${index}`} className="space-y-1">
                         <Label htmlFor={`text-field-${index}`} className="capitalize text-xs text-gray-500 dark:text-gray-400">
@@ -889,7 +893,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
               <p className="text-xs text-muted-foreground flex items-start space-x-1">
                 <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
                 <span>
-                  {targetValue && parseFloat(targetValue) > 0 
+                  {targetValue && parseFloat(targetValue) > 0
                     ? "Esta é a meta salva anteriormente. Você pode alterá-la se necessário."
                     : "Defina uma meta para este indicador"}
                 </span>

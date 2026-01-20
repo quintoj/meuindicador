@@ -26,13 +26,13 @@ export type IndicatorStatus = 'success' | 'warning' | 'critical' | 'neutral';
 export interface InputFieldsSchema {
   /** Campos preenchidos uma vez (ex: meta mensal, base de clientes) */
   fixed: string[];
-  
+
   /** Campos preenchidos periodicamente (ex: vendas do dia, cancelamentos) */
   daily: string[];
-  
+
   /** Método de cálculo usado pelo frontend */
   calculation?: string;
-  
+
   /** Range ideal para indicadores NEUTRAL_RANGE */
   ideal_range?: {
     min: number;
@@ -53,15 +53,16 @@ export interface IndicatorTemplateWithMetadata {
   complexity: string;
   icon_name: string;
   required_data: string[];
-  
+
   // Novos campos
   direction: IndicatorDirection;
   unit_type: UnitType;
   calc_method: string;
+  default_target?: number;
   default_warning_threshold?: number;
   default_critical_threshold?: number;
   input_fields: InputFieldsSchema;
-  
+
   created_at: string;
   updated_at?: string;
 }
@@ -99,12 +100,12 @@ export function calculateIndicatorStatus(
   thresholds: IndicatorThresholds
 ): StatusCalculation {
   const performancePct = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
-  
+
   let status: IndicatorStatus = 'neutral';
   let message = '';
   let color = '';
   let icon = '';
-  
+
   switch (direction) {
     case 'HIGHER_BETTER':
       if (performancePct >= 100) {
@@ -124,7 +125,7 @@ export function calculateIndicatorStatus(
         icon = 'XCircle';
       }
       break;
-      
+
     case 'LOWER_BETTER':
       if (currentValue <= thresholds.critical) {
         status = 'success';
@@ -143,11 +144,11 @@ export function calculateIndicatorStatus(
         icon = 'XCircle';
       }
       break;
-      
+
     case 'NEUTRAL_RANGE':
       const ideal_min = thresholds.critical;
       const ideal_max = thresholds.warning;
-      
+
       if (currentValue >= ideal_min && currentValue <= ideal_max) {
         status = 'success';
         message = 'No range ideal';
@@ -166,7 +167,7 @@ export function calculateIndicatorStatus(
       }
       break;
   }
-  
+
   return { status, performance_pct: performancePct, message, color, icon };
 }
 
@@ -180,16 +181,16 @@ export function formatIndicatorValue(value: number, unitType: UnitType): string 
         style: 'currency',
         currency: 'BRL'
       }).format(value);
-      
+
     case 'percentage':
       return `${value.toFixed(1)}%`;
-      
+
     case 'integer':
       return Math.round(value).toLocaleString('pt-BR');
-      
+
     case 'decimal':
       return value.toFixed(2).replace('.', ',');
-      
+
     default:
       return value.toString();
   }
@@ -204,7 +205,7 @@ export function getDirectionDescription(direction: IndicatorDirection): string {
     'LOWER_BETTER': 'Quanto menor, melhor',
     'NEUTRAL_RANGE': 'Ideal dentro do range'
   };
-  
+
   return descriptions[direction] || '';
 }
 
@@ -217,7 +218,7 @@ export function getDirectionIcon(direction: IndicatorDirection): string {
     'LOWER_BETTER': 'TrendingDown',
     'NEUTRAL_RANGE': 'Target'
   };
-  
+
   return icons[direction] || 'HelpCircle';
 }
 
@@ -232,13 +233,13 @@ export function isValueInRange(
   switch (direction) {
     case 'HIGHER_BETTER':
       return value >= thresholds.warning;
-      
+
     case 'LOWER_BETTER':
       return value <= thresholds.warning;
-      
+
     case 'NEUTRAL_RANGE':
       return value >= thresholds.critical && value <= thresholds.warning;
-      
+
     default:
       return true;
   }
@@ -256,7 +257,7 @@ export function generateDynamicInputs(schema: InputFieldsSchema) {
       frequency: 'fixed',
       placeholder: 'Digite o valor'
     })),
-    
+
     dailyInputs: schema.daily.map(field => ({
       name: field,
       label: field,
@@ -275,30 +276,30 @@ export function applyCalculationMethod(
   inputs: Record<string, number>
 ): number {
   const values = Object.values(inputs);
-  
+
   switch (method) {
     case 'churn_rate':
       // Cancelamentos / Base × 100
       return values.length >= 2 ? (values[1] / values[0]) * 100 : 0;
-      
+
     case 'nps_score':
       // Promotores - Detratores
       return values.length >= 2 ? values[0] - values[1] : 0;
-      
+
     case 'percentage_of_total':
     case 'percentage_of_revenue':
       // Parte / Todo × 100
       return values.length >= 2 ? (values[0] / values[1]) * 100 : 0;
-      
+
     case 'average_ticket':
       // Vendas / Clientes
       return values.length >= 2 ? values[0] / values[1] : 0;
-      
+
     case 'cac_calculation':
     case 'cost_per_acquisition':
       // Investimento / Novos Clientes
       return values.length >= 2 ? values[0] / values[1] : 0;
-      
+
     case 'simple_formula':
     default:
       // Soma simples ou primeiro valor
@@ -316,7 +317,7 @@ export function getStatusBadgeColor(status: IndicatorStatus): string {
     critical: 'bg-red-100 text-red-800 border-red-300',
     neutral: 'bg-gray-100 text-gray-800 border-gray-300'
   };
-  
+
   return colors[status] || colors.neutral;
 }
 
@@ -332,17 +333,17 @@ export function getRecommendation(
   if (status === 'success') {
     return '✅ Continue assim! Seu indicador está saudável.';
   }
-  
+
   if (direction === 'HIGHER_BETTER') {
     const diff = targetValue - currentValue;
     return `⚠️ Você precisa aumentar em ${formatIndicatorValue(diff, 'currency')} para atingir a meta.`;
   }
-  
+
   if (direction === 'LOWER_BETTER') {
     const diff = currentValue - targetValue;
     return `⚠️ Você precisa reduzir em ${formatIndicatorValue(diff, 'currency')} para atingir a meta.`;
   }
-  
+
   return '⚠️ Ajuste seus valores para o range ideal.';
 }
 

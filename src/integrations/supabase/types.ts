@@ -50,6 +50,7 @@ export type Database = {
           complexity: Database["public"]["Enums"]["complexity_level"]
           created_at: string
           default_critical_threshold: number | null
+          default_target: number | null
           default_warning_threshold: number | null
           description: string
           direction: Database["public"]["Enums"]["indicator_direction"]
@@ -69,6 +70,7 @@ export type Database = {
           complexity?: Database["public"]["Enums"]["complexity_level"]
           created_at?: string
           default_critical_threshold?: number | null
+          default_target?: number | null
           default_warning_threshold?: number | null
           description: string
           direction?: Database["public"]["Enums"]["indicator_direction"]
@@ -88,6 +90,7 @@ export type Database = {
           complexity?: Database["public"]["Enums"]["complexity_level"]
           created_at?: string
           default_critical_threshold?: number | null
+          default_target?: number | null
           default_warning_threshold?: number | null
           description?: string
           direction?: Database["public"]["Enums"]["indicator_direction"]
@@ -193,6 +196,7 @@ export type Database = {
           complexity: Database["public"]["Enums"]["complexity_level"] | null
           created_at: string | null
           default_critical_threshold: number | null
+          default_target: number | null
           default_warning_threshold: number | null
           direction: Database["public"]["Enums"]["indicator_direction"] | null
           id: string | null
