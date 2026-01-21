@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, ArrowLeft, Settings, Plus, LogOut, User } from "lucide-react";
+import { BarChart3, ArrowLeft, Settings, Plus, LogOut, User, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface HeaderProps {
@@ -11,10 +11,10 @@ interface HeaderProps {
   title?: string;
 }
 
-const Header = ({ 
-  showBackButton = false, 
+const Header = ({
+  showBackButton = false,
   showSettings = false,
-  title 
+  title
 }: HeaderProps) => {
   const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,7 @@ const Header = ({
         setLoading(true);
         // Obter usuário autenticado
         const { data: { user } } = await supabase.auth.getUser();
-        
+
         if (!user) {
           setUserName("");
           setLoading(false);
@@ -91,11 +91,11 @@ const Header = ({
 
   const handleLogoClick = async (e: React.MouseEvent) => {
     e.preventDefault();
-    
+
     try {
       // Verificar se há usuário logado
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session) {
         // Usuário logado → ir para Dashboard
         navigate("/dashboard");
@@ -118,8 +118,8 @@ const Header = ({
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
             </Link>
           )}
-          <a 
-            href="#" 
+          <a
+            href="#"
             onClick={handleLogoClick}
             className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity"
           >
@@ -142,6 +142,11 @@ const Header = ({
               </Button>
             </Link>
           )}
+          <Link to="/help">
+            <Button variant="outline" size="icon" title="Ajuda/Manual">
+              <HelpCircle className="w-4 h-4" />
+            </Button>
+          </Link>
           {!showBackButton && (
             <Link to="/store">
               <Button variant="outline">Loja de Indicadores</Button>

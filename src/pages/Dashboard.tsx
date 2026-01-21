@@ -31,8 +31,11 @@ import KPICard from "@/components/dashboard/KPICard";
 import AIChat from "@/components/ai/AIChat";
 import UserHelpGuide from "@/components/dashboard/UserHelpGuide";
 import Header from "@/components/Header";
+import { DateRangeFilter, type DateRange } from "@/components/dashboard/DateRangeFilter";
+import { useKPIWithPeriod } from "@/hooks/useKPIWithPeriod";
 import { supabase } from "@/integrations/supabase/client";
 import { getIndicatorStatus, type IndicatorDirection } from "@/utils/indicators";
+import { startOfMonth, endOfMonth } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 
 interface KPI {
@@ -108,6 +111,15 @@ const Dashboard = () => {
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Estado do filtro de data (default: este mês)
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
+
+  // Usar hook customizado para buscar KPIs com agregação por período
+  const { kpis: kpisWithPeriod, loading: loadingPeriod, refetch: refetchKPIs } = useKPIWithPeriod(dateRange);
 
   // KPIs estáticos como fallback
   const staticKPIs: KPI[] = [
@@ -245,16 +257,36 @@ const Dashboard = () => {
     fetchUserIndicators();
   }, [fetchUserIndicators]);
 
-  // Filtrar KPIs baseado na busca
-  const filteredKPIs = kpis.filter(kpi =>
+  // Função combinada para atualizar TODOS os dados (Live Reload)
+  const handleRefreshData = useCallback(async () => {
+    await Promise.all([
+      fetchUserIndicators(),
+      refetchKPIs()
+    ]);
+  }, [fetchUserIndicators, refetchKPIs]);
+
+  // Filtrar KPIs baseado na busca (usar kpisWithPeriod se disponível, caso contrário kpis)
+  const kpisToDisplay = kpisWithPeriod.length > 0 ? kpisWithPeriod : kpis;
+
+  const filteredKPIs = kpisToDisplay.filter((kpi: any) =>
     kpi.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    kpi.segment.toLowerCase().includes(searchTerm.toLowerCase())
+    (kpi.segment || 'Geral').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Calcular estatísticas usando a lógica centralizada
-  // 🔧 CORRIGIDO: Agora respeita HIGHER_BETTER vs LOWER_BETTER
-  // 🔧 v1.27: Agora usa thresholds do template
-  const stats = kpis.reduce((acc, kpi) => {
+  // Mapear AggregatedKPI para KPI (compatibilidade com KPICard)
+  const mappedKPIs: KPI[] = filteredKPIs.map((kpi: any) => ({
+    id: String(kpi.id),
+    name: kpi.name || '',
+    value: kpi.realizado_periodo ?? kpi.current_value ?? kpi.value ?? 0,
+    target: kpi.meta_proporcional ?? kpi.target_value ?? kpi.target ?? 0,
+    format: kpi.format || 'number',
+    icon: getIcon(kpi.icon_name || ''),
+    segment: kpi.segment || 'Geral',
+    template: kpi.template || undefined
+  }));
+
+  // Calcular estatísticas usando dados do período
+  const stats = mappedKPIs.reduce((acc, kpi) => {
     const direction = (kpi.template?.direction as IndicatorDirection) || 'HIGHER_BETTER';
     const warningThreshold = kpi.template?.default_warning_threshold;
     const criticalThreshold = kpi.template?.default_critical_threshold;
@@ -266,7 +298,7 @@ const Dashboard = () => {
 
     return acc;
   }, {
-    total: kpis.length,
+    total: mappedKPIs.length,
     success: 0,  // Verde (Acima/Dentro da Meta)
     warning: 0,  // Amarelo (Próximo da Meta)
     danger: 0    // Vermelho (Abaixo/Fora da Meta)
@@ -293,6 +325,11 @@ const Dashboard = () => {
               <Calendar className="w-4 h-4" />
               <span>Última atualização: hoje às 14:30</span>
             </div>
+          </div>
+
+          {/* Filtro de Período */}
+          <div className="mb-6">
+            <DateRangeFilter value={dateRange} onChange={setDateRange} />
           </div>
 
           {/* Quick Stats */}
@@ -360,7 +397,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {loading ? (
+            {(loading || loadingPeriod) ? (
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">Carregando indicadores...</h3>
@@ -368,10 +405,10 @@ const Dashboard = () => {
               </div>
             ) : (
               <>
-                {filteredKPIs.length > 0 ? (
+                {mappedKPIs.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {filteredKPIs.map((kpi) => (
-                      <KPICard key={kpi.id} kpi={kpi} onUpdate={fetchUserIndicators} />
+                    {mappedKPIs.map((kpi) => (
+                      <KPICard key={kpi.id} kpi={kpi} onUpdate={handleRefreshData} />
                     ))}
                   </div>
                 ) : (

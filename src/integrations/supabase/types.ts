@@ -107,6 +107,54 @@ export type Database = {
         }
         Relationships: []
       }
+      lancamentos: {
+        Row: {
+          id: string
+          indicador_id: string
+          user_id: string
+          valor: number
+          data_referencia: string
+          observacao: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          indicador_id: string
+          user_id: string
+          valor: number
+          data_referencia: string
+          observacao?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          indicador_id?: string
+          user_id?: string
+          valor?: number
+          data_referencia?: string
+          observacao?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamentos_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "user_indicators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamentos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       user_indicators: {
         Row: {
           created_at: string
@@ -120,6 +168,9 @@ export type Database = {
           target_value: number | null
           updated_at: string | null
           user_id: string
+          frequencia_meta: string | null
+          tipo_agregacao: string | null
+          direcao_meta: string | null
         }
         Insert: {
           created_at?: string
@@ -133,6 +184,9 @@ export type Database = {
           target_value?: number | null
           updated_at?: string | null
           user_id: string
+          frequencia_meta?: string | null
+          tipo_agregacao?: string | null
+          direcao_meta?: string | null
         }
         Update: {
           created_at?: string
@@ -146,6 +200,9 @@ export type Database = {
           target_value?: number | null
           updated_at?: string | null
           user_id?: string
+          frequencia_meta?: string | null
+          tipo_agregacao?: string | null
+          direcao_meta?: string | null
         }
         Relationships: [
           {

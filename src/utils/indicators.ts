@@ -30,7 +30,7 @@ export function calculateIndicatorStatus(
   warningThreshold?: number | null,
   criticalThreshold?: number | null
 ): IndicatorStatus {
-  
+
   // Evitar divisão por zero
   if (target === 0) {
     return {
@@ -50,7 +50,7 @@ export function calculateIndicatorStatus(
     // 🔧 CORREÇÃO v1.27: Usa thresholds do template se fornecidos
     const warning = warningThreshold !== null && warningThreshold !== undefined ? warningThreshold : (target * 0.8);
     const critical = criticalThreshold !== null && criticalThreshold !== undefined ? criticalThreshold : target;
-    
+
     if (value >= critical) {
       return {
         color: 'success',
@@ -59,7 +59,7 @@ export function calculateIndicatorStatus(
         text: 'acima da meta'
       };
     }
-    
+
     if (value >= warning) {
       return {
         color: 'warning',
@@ -68,7 +68,7 @@ export function calculateIndicatorStatus(
         text: 'próximo da meta'
       };
     }
-    
+
     return {
       color: 'danger',
       percentage,
@@ -84,7 +84,7 @@ export function calculateIndicatorStatus(
     // 🔧 CORREÇÃO v1.27: Usa thresholds do template se fornecidos
     const warning = warningThreshold !== null && warningThreshold !== undefined ? warningThreshold : target;
     const critical = criticalThreshold !== null && criticalThreshold !== undefined ? criticalThreshold : (target * 1.2);
-    
+
     // 🟢 Verde: Valor abaixo ou igual ao threshold de warning
     if (value <= warning) {
       return {
@@ -94,7 +94,7 @@ export function calculateIndicatorStatus(
         text: 'dentro da meta'
       };
     }
-    
+
     // 🟡 Amarelo: Entre warning e critical
     if (value <= critical) {
       return {
@@ -104,7 +104,7 @@ export function calculateIndicatorStatus(
         text: 'acima da meta'
       };
     }
-    
+
     // 🔴 Vermelho: Acima do critical
     return {
       color: 'danger',
@@ -121,7 +121,7 @@ export function calculateIndicatorStatus(
     const tolerance = 0.1; // 10% de tolerância
     const lowerBound = target * (1 - tolerance);
     const upperBound = target * (1 + tolerance);
-    
+
     if (value >= lowerBound && value <= upperBound) {
       return {
         color: 'success',
@@ -130,11 +130,11 @@ export function calculateIndicatorStatus(
         text: 'no range ideal'
       };
     }
-    
+
     const warningTolerance = 0.2; // 20%
     const warningLowerBound = target * (1 - warningTolerance);
     const warningUpperBound = target * (1 + warningTolerance);
-    
+
     if (value >= warningLowerBound && value <= warningUpperBound) {
       return {
         color: 'warning',
@@ -143,7 +143,7 @@ export function calculateIndicatorStatus(
         text: 'próximo do ideal'
       };
     }
-    
+
     return {
       color: 'danger',
       percentage,
@@ -179,7 +179,8 @@ export function getIndicatorStatus(
 }
 
 /**
- * Retorna o texto de diferença formatado
+ * Retorna o texto de diferença formatado (SEM considerar direção)
+ * @deprecated Use getDifferenceTextWithDirection para lógica correta
  */
 export function getDifferenceText(
   value: number,
@@ -188,10 +189,89 @@ export function getDifferenceText(
 ): { value: number; percentage: string } {
   const diff = Math.abs(value - target);
   const percentage = target !== 0 ? Math.abs((diff / target) * 100) : 0;
-  
+
   return {
     value: diff,
     percentage: percentage.toFixed(1)
   };
 }
 
+/**
+ * Retorna o texto de diferença CORRETO baseado na direção e status
+ * ✅ MAIOR_MELHOR (Vendas): "R$ 55 acima da meta" (verde) ou "Faltam R$ 55" (vermelho)
+ * ✅ MENOR_MELHOR (Custos): "R$ 20 abaixo do teto" (verde) ou "R$ 30 excedido" (vermelho)
+ */
+export function getDifferenceTextWithDirection(
+  value: number,
+  target: number,
+  direction: IndicatorDirection = 'HIGHER_BETTER'
+): { value: number; percentage: string; text: string; isPositive: boolean } {
+  const diff = Math.abs(value - target);
+  const percentage = target !== 0 ? Math.abs((diff / target) * 100) : 0;
+
+  // MAIOR_MELHOR (Vendas, Faturamento)
+  if (direction === 'HIGHER_BETTER') {
+    if (value >= target) {
+      return {
+        value: diff,
+        percentage: percentage.toFixed(1),
+        text: 'acima da meta',
+        isPositive: true
+      };
+    } else {
+      return {
+        value: diff,
+        percentage: percentage.toFixed(1),
+        text: 'faltam para a meta',
+        isPositive: false
+      };
+    }
+  }
+
+  // MENOR_MELHOR (Custos, Reclamações)
+  if (direction === 'LOWER_BETTER') {
+    if (value <= target) {
+      return {
+        value: diff,
+        percentage: percentage.toFixed(1),
+        text: 'abaixo do teto',
+        isPositive: true
+      };
+    } else {
+      return {
+        value: diff,
+        percentage: percentage.toFixed(1),
+        text: 'excedido',
+        isPositive: false
+      };
+    }
+  }
+
+  // NEUTRAL_RANGE
+  if (direction === 'NEUTRAL_RANGE') {
+    const tolerance = target * 0.1;
+    if (Math.abs(value - target) <= tolerance) {
+      return {
+        value: diff,
+        percentage: percentage.toFixed(1),
+        text: 'dentro do range ideal',
+        isPositive: true
+      };
+    } else {
+      return {
+        value: diff,
+        percentage: percentage.toFixed(1),
+        text: 'fora do range',
+        isPositive: false
+      };
+    }
+  }
+
+  // Fallback
+  return {
+    value: diff,
+    percentage: percentage.toFixed(1),
+    text: 'de diferença da meta',
+    isPositive: false
+  };
+}

@@ -33,10 +33,10 @@ interface EditIndicatorModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kpi: KPI;
-  onUpdate: () => void;
+  onUpdateSuccess: () => void;
 }
 
-const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicatorModalProps) => {
+const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdateSuccess }: EditIndicatorModalProps) => {
   const [name, setName] = useState(kpi.name);
   const [target, setTarget] = useState(kpi.target.toString());
   const [format, setFormat] = useState<"currency" | "percentage" | "number">(kpi.format);
@@ -149,7 +149,9 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
       });
 
       onOpenChange(false);
-      onUpdate();
+      onOpenChange(false);
+      onUpdateSuccess();
+      // Força a atualização da lista no Dashboard
 
     } catch (err: any) {
       console.error('Erro ao atualizar indicador:', err);
@@ -200,7 +202,8 @@ const EditIndicatorModal = ({ open, onOpenChange, kpi, onUpdate }: EditIndicator
 
       setShowDeleteDialog(false);
       onOpenChange(false);
-      onUpdate();
+      onOpenChange(false);
+      onUpdateSuccess();
 
     } catch (err: any) {
       console.error('Erro ao remover indicador:', err);
