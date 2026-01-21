@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateAggregatedValue, calculateProportionalTarget } from "@/utils/aggregation";
 import type { DateRange } from "@/components/dashboard/DateRangeFilter";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
 
 interface KPIData {
     id: string;
@@ -65,8 +65,9 @@ export const useKPIWithPeriod = (dateRange: DateRange) => {
 
             // 3. Buscar lançamentos de TODOS os indicadores no período
             const indicatorIds = indicators.map((i) => i.id);
-            const dataInicio = format(dateRange.from, "yyyy-MM-dd");
-            const dataFim = format(dateRange.to, "yyyy-MM-dd");
+            // Normalização de Datas para evitar problemas de Timezone/Hora
+            const dataInicio = format(startOfDay(dateRange.from), "yyyy-MM-dd");
+            const dataFim = format(endOfDay(dateRange.to), "yyyy-MM-dd");
 
             const { data: lancamentos, error: lancamentosError } = await supabase
                 .from("lancamentos")
@@ -87,14 +88,20 @@ export const useKPIWithPeriod = (dateRange: DateRange) => {
                 ) || [];
 
                 // Pegar configurações (usar defaults se não existir)
-                const tipoAgregacao = (indicator.tipo_agregacao || "soma") as any;
+                const tipoAgregacao = (indicator.tipo_agregacao || "soma") as string;
                 const frequenciaMeta = (indicator.frequencia_meta || "mensal") as any;
 
-                // Calcular valor agregado
-                const realizado = calculateAggregatedValue(
-                    indicatorLancamentos,
-                    tipoAgregacao
-                );
+                // Calcular valor agregado (Agregação Robusta)
+                let realizado = 0;
+                if (tipoAgregacao === 'soma') {
+                    // Reduce explícito para garantir a soma de todos os registros
+                    realizado = indicatorLancamentos.reduce((acc, curr) => acc + Number(curr.valor), 0);
+                } else {
+                    realizado = calculateAggregatedValue(
+                        indicatorLancamentos,
+                        tipoAgregacao as any
+                    );
+                }
 
                 // Calcular meta proporcional
                 const metaBase =

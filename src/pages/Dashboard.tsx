@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import KPICard from "@/components/dashboard/KPICard";
-import AIChat from "@/components/ai/AIChat";
+import { IAInsightsCard } from "@/components/dashboard/IAInsightsCard";
 import UserHelpGuide from "@/components/dashboard/UserHelpGuide";
 import Header from "@/components/Header";
 import { DateRangeFilter, type DateRange } from "@/components/dashboard/DateRangeFilter";
@@ -59,6 +59,7 @@ interface KPI {
     default_warning_threshold?: number | null;
     default_critical_threshold?: number | null;
   };
+  originalTarget?: number; // Meta original (mensal) para contexto
 }
 
 // Mapeamento robusto de nomes de ícones para componentes
@@ -234,7 +235,9 @@ const Dashboard = () => {
             format: item.format || 'number',
             icon: getIcon(item.icon_name),
             segment: item.segment || 'Geral',
-            template: item.template || undefined // 👈 Incluir template no KPI
+
+            template: item.template || undefined, // 👈 Incluir template no KPI
+            originalTarget: resolvedTarget // Meta original do banco
           };
         });
 
@@ -282,7 +285,9 @@ const Dashboard = () => {
     format: kpi.format || 'number',
     icon: getIcon(kpi.icon_name || ''),
     segment: kpi.segment || 'Geral',
-    template: kpi.template || undefined
+
+    template: kpi.template || undefined,
+    originalTarget: kpi.target_value ?? kpi.target ?? 0 // Meta mensal original
   }));
 
   // Calcular estatísticas usando dados do período
@@ -308,7 +313,6 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <Header
-        showAddButton={true}
         showSettings={true}
         title="Dashboard"
       />
@@ -449,9 +453,9 @@ const Dashboard = () => {
             </Link>
           </div>
 
-          {/* AI Chat Sidebar */}
+          {/* AI Insights Sidebar */}
           <div className="lg:col-span-1">
-            <AIChat />
+            <IAInsightsCard kpis={filteredKPIs} />
           </div>
         </div>
       </div>

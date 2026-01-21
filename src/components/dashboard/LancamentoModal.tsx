@@ -97,10 +97,16 @@ export const LancamentoModal = ({
         }
     }, [temVariaveis]);
 
-    // Inicializar com data de hoje
+    // Helper para obter data YYYY-MM-DD em fuso local
+    const getLocalMapDate = () => {
+        const d = new Date();
+        const offset = d.getTimezoneOffset() * 60000;
+        return new Date(d.getTime() - offset).toISOString().split('T')[0];
+    };
+
+    // Inicializar com data de hoje (Local Time)
     useEffect(() => {
-        const hoje = new Date().toISOString().split("T")[0];
-        setData(hoje);
+        setData(getLocalMapDate());
     }, []);
 
     // Unified Data Fetch: Busca histórico (5 dias) + Data Selecionada
@@ -355,7 +361,7 @@ export const LancamentoModal = ({
                             type="date"
                             value={data}
                             onChange={(e) => setData(e.target.value)}
-                            max={new Date().toISOString().split("T")[0]}
+                            max={getLocalMapDate()}
                             className="text-base"
                         />
                     </div>

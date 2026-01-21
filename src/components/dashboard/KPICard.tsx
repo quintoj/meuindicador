@@ -33,7 +33,9 @@ interface KPI {
     unit_type: string;
     default_warning_threshold?: number | null;
     default_critical_threshold?: number | null;
+
   };
+  originalTarget?: number;
 }
 
 interface KPICardProps {
@@ -55,12 +57,13 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
       case "percentage":
         return `${value.toFixed(1)}%`;
       default:
-        return value.toLocaleString('pt-BR');
+        return value.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
     }
   };
 
   // 🔥 NOVA LÓGICA: Usa a direção do indicador
-  const direction = (kpi.template?.direction || 'HIGHER_BETTER') as IndicatorDirection;
+  const directionRaw = kpi.template?.direction || 'HIGHER_BETTER';
+  const direction = directionRaw.toUpperCase() as IndicatorDirection;
 
   // 🔧 v1.27: Usa thresholds do template para cálculo de status
   const warningThreshold = kpi.template?.default_warning_threshold;
@@ -84,6 +87,16 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
         return "bg-gradient-danger";
       default:
         return "bg-gradient-primary";
+    }
+  };
+
+  const getStatusColor = (type: 'bg' | 'text') => {
+    const prefix = type === 'bg' ? 'bg' : 'text';
+    switch (status.color) {
+      case 'success': return `${prefix}-emerald-500`;
+      case 'warning': return `${prefix}-yellow-500`;
+      case 'danger': return `${prefix}-red-500`;
+      default: return `${prefix}-emerald-500`;
     }
   };
 
@@ -163,13 +176,23 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
         <CardContent className="pt-0">
           <div className="space-y-4">
             {/* Current Value */}
-            <div>
+            <div className="mb-4">
               <div className="text-2xl font-bold text-foreground">
                 {formatValue(kpi.value, kpi.format)}
               </div>
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <Target className="w-4 h-4" />
-                <span>Meta: {formatValue(kpi.target, kpi.format)}</span>
+
+              {/* Contexto de Metas - Solicitado pelo usuário */}
+              <div className="flex flex-col gap-1 text-xs text-muted-foreground mt-1">
+                <div className="flex items-center space-x-2">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>Meta Período: {kpi.format === 'percentage' ? formatValue(kpi.target, kpi.format) : formatValue(Math.round(kpi.target), kpi.format)}</span> {/* Arredondando visualmente */}
+                </div>
+                {kpi.originalTarget !== undefined && kpi.originalTarget !== kpi.target && (
+                  <div className="flex items-center space-x-2 text-primary/80 font-medium bg-primary/5 w-fit px-1.5 py-0.5 rounded">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span title="Meta cheia definida no cadastro">Meta Mensal: {formatValue(kpi.originalTarget, kpi.format)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -178,23 +201,17 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Performance</span>
                 <div className="flex items-center space-x-1">
-                  <StatusIcon className={`w-4 h-4 ${status.color === 'success' ? 'text-success' :
-                    status.color === 'warning' ? 'text-warning' : 'text-danger'
-                    }`} />
-                  <span className={`font-semibold ${status.color === 'success' ? 'text-success' :
-                    status.color === 'warning' ? 'text-warning' : 'text-danger'
-                    }`}>
+                  <StatusIcon className={`w-4 h-4 ${getStatusColor('text')}`} />
+                  <span className={`font-semibold ${getStatusColor('text')}`}>
                     {status.percentage.toFixed(1)}%
                   </span>
                 </div>
               </div>
 
-              {/* Progress Bar */}
+              {/* Progress Bar com Cores Explícitas */}
               <div className="w-full bg-muted rounded-full h-2">
                 <div
-                  className={`h-2 rounded-full transition-all duration-500 ${status.color === 'success' ? 'bg-success' :
-                    status.color === 'warning' ? 'bg-warning' : 'bg-danger'
-                    }`}
+                  className={`h-2 rounded-full transition-all duration-500 ${getStatusColor('bg')}`}
                   style={{ width: `${Math.min(status.percentage, 100)}%` }}
                 ></div>
               </div>

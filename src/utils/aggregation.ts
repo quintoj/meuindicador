@@ -57,36 +57,36 @@ export function calculateProportionalTarget(
     dataInicio: Date,
     dataFim: Date
 ): number {
-    // Calcular dias no período selecionado
-    const diasSelecionados = differenceInDays(dataFim, dataInicio) + 1;
+    // 1. Descobrir quantos dias tem o período selecionado
+    // Adiciona 1 porque a diferença entre hoje e hoje é 0, mas conta como 1 dia
+    const diasNoFiltro = differenceInDays(dataFim, dataInicio) + 1;
 
+    // 2. Descobrir a base de divisão (Frequência da Meta cadastrada)
+    // Lógica solicitada: Mensal = 30 dias fixos, Semanal = 7, Diária = 1
+    let divisor = 1;
     switch (frequenciaMeta) {
-        case "diaria":
-            // Meta diária: multiplicar pelos dias selecionados
-            return metaBase * diasSelecionados;
-
-        case "semanal":
-            // Meta semanal: proporcional aos dias (meta / 7 * dias)
-            return (metaBase / 7) * diasSelecionados;
-
         case "mensal":
-            // Meta mensal: proporcional aos dias do mês
-            // Usar o mês de referência da data de início
-            const inicioMes = startOfMonth(dataInicio);
-            const fimMes = endOfMonth(dataInicio);
-            const diasNoMes = differenceInDays(fimMes, inicioMes) + 1;
-
-            // Se o período é maior ou igual ao mês completo, returna a meta cheia
-            if (diasSelecionados >= diasNoMes) {
-                return metaBase;
-            }
-
-            // Caso contrário, calcular proporcionalmente
-            return (metaBase / diasNoMes) * diasSelecionados;
-
+            divisor = 30;
+            break;
+        case "semanal":
+            divisor = 7;
+            break;
+        case "diaria":
+            divisor = 1;
+            break;
         default:
-            return metaBase;
+            divisor = 30; // Fallback para mensal
     }
+
+    // 3. O Cálculo Real: (Meta / Divisor) * Dias
+    const valorDiario = metaBase / divisor;
+
+    // Se o período selecionado for maior que o divisor (ex: 45 dias num filtro mensal),
+    // a meta deve crescer proporcionalmente.
+    // Se a frequência for mensal e selecionarmos exatamente 30 dias, deve bater a meta cheia.
+    const metaProporcional = valorDiario * diasNoFiltro;
+
+    return metaProporcional;
 }
 
 /**
