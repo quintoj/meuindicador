@@ -14,12 +14,20 @@ interface UseLancamentosReturn {
         dataInicio: string,
         dataFim: string
     ) => Promise<void>;
+    fetchHistory: (
+        indicadorId: string,
+        limit?: number
+    ) => Promise<void>;
     upsertLancamento: (params: {
         indicador_id: string;
         data_referencia: string;
         valor: number;
         observacao?: string;
     }) => Promise<boolean>;
+    updateLancamento: (
+        id: string,
+        params: { data_referencia?: string; valor?: number; observacao?: string }
+    ) => Promise<boolean>;
     deleteLancamento: (lancamentoId: string) => Promise<boolean>;
 }
 
@@ -74,6 +82,48 @@ export const useLancamentos = (): UseLancamentosReturn => {
                 variant: "destructive",
                 title: "Erro inesperado",
                 description: "Ocorreu um erro ao buscar os lançamentos.",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /**
+     * Busca o histórico de lançamentos (últimos N registros)
+     * @param indicadorId ID do indicador
+     * @param limit Limite de registros (default: 30)
+     */
+    const fetchHistory = async (
+        indicadorId: string,
+        limit: number = 30
+    ): Promise<void> => {
+        try {
+            setLoading(true);
+
+            const { data, error } = await supabase
+                .from("lancamentos")
+                .select("*")
+                .eq("indicador_id", indicadorId)
+                .order("data_referencia", { ascending: false })
+                .limit(limit);
+
+            if (error) {
+                console.error("Erro ao buscar histórico:", error);
+                toast({
+                    variant: "destructive",
+                    title: "Erro ao carregar histórico",
+                    description: "Não foi possível buscar os lançamentos.",
+                });
+                return;
+            }
+
+            setLancamentos(data || []);
+        } catch (err) {
+            console.error("Erro inesperado ao buscar histórico:", err);
+            toast({
+                variant: "destructive",
+                title: "Erro inesperado",
+                description: "Ocorreu um erro ao buscar o histórico.",
             });
         } finally {
             setLoading(false);
@@ -156,6 +206,48 @@ export const useLancamentos = (): UseLancamentosReturn => {
         }
     };
 
+
+
+    /**
+     * Atualiza um lançamento específico pelo ID
+     */
+    const updateLancamento = async (
+        id: string,
+        params: { data_referencia?: string; valor?: number; observacao?: string }
+    ): Promise<boolean> => {
+        try {
+            setLoading(true);
+
+            const { error } = await supabase
+                .from("lancamentos")
+                .update(params)
+                .eq("id", id);
+
+            if (error) {
+                console.error("Erro ao atualizar lançamento:", error);
+                toast({
+                    variant: "destructive",
+                    title: "Erro ao atualizar",
+                    description: error.message.includes("unique")
+                        ? "Já existe um lançamento para esta data."
+                        : "Não foi possível atualizar o registro.",
+                });
+                return false;
+            }
+
+            toast({
+                title: "Lançamento atualizado!",
+                description: "O registro foi alterado com sucesso.",
+            });
+            return true;
+        } catch (err) {
+            console.error("Erro inesperado ao atualizar:", err);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     /**
      * Deleta um lançamento
      * @param lancamentoId UUID do lançamento
@@ -206,7 +298,9 @@ export const useLancamentos = (): UseLancamentosReturn => {
         lancamentos,
         loading,
         fetchLancamentos,
+        fetchHistory,
         upsertLancamento,
+        updateLancamento,
         deleteLancamento,
     };
 };

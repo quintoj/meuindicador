@@ -8,10 +8,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { LucideIcon, TrendingUp, TrendingDown, Target, MoreVertical, BarChart3, Edit, Trash2, Calendar } from "lucide-react";
+import { LucideIcon, TrendingUp, TrendingDown, Target, MoreVertical, BarChart3, Edit, Trash2, Calendar, History } from "lucide-react";
 import { useState } from "react";
 import EditIndicatorModal from "./EditIndicatorModal";
 import { LancamentoModal } from "./LancamentoModal";
+import { HistoryModal } from "./HistoryModal";
 import { calculateIndicatorStatus, getDifferenceTextWithDirection, type IndicatorDirection } from "@/utils/indicators";
 
 interface KPI {
@@ -46,6 +47,7 @@ interface KPICardProps {
 const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   const formatValue = (value: number, format: string) => {
     switch (format) {
@@ -157,6 +159,15 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
                   <Edit className="w-4 h-4 mr-2" />
                   Editar Indicador
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsHistoryModalOpen(true);
+                  }}
+                >
+                  <History className="w-4 h-4 mr-2" />
+                  Gerenciar Lançamentos
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {
@@ -260,6 +271,19 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
         onOpenChange={setIsEditModalOpen}
         kpi={kpi}
         onUpdateSuccess={handleUpdate}
+      />
+
+      {/* Modal de Histórico */}
+      <HistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        indicador={{
+          id: kpi.id,
+          name: kpi.name,
+          format: kpi.format,
+          template: kpi.template
+        }}
+        onDataChange={handleUpdate}
       />
     </>
   );
