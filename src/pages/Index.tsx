@@ -91,8 +91,8 @@ const Index = () => {
           <div className="mb-16 animate-slide-up">
             <div className="relative mx-auto max-w-4xl">
               <div className="absolute inset-0 bg-gradient-primary rounded-3xl opacity-10 blur-3xl transform scale-105"></div>
-              <img 
-                src={heroDashboard} 
+              <img
+                src={heroDashboard}
                 alt="Dashboard do Meu Indicador mostrando indicadores de performance com status visual intuitivo"
                 className="relative w-full rounded-3xl shadow-custom-xl border border-border/50"
               />
@@ -186,8 +186,11 @@ const Index = () => {
             </div>
             <span className="font-semibold text-foreground">Meu Indicador</span>
           </div>
-          <p className="text-muted-foreground">
-            © 2024 Meu Indicador. Transformando dados em crescimento.
+          <p className="text-muted-foreground mb-2">
+            © {new Date().getFullYear()} Meu Indicador. Todos os direitos reservados.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Versão {import.meta.env.VITE_APP_VERSION || '1.0.0'}
           </p>
         </div>
       </footer>

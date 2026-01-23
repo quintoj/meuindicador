@@ -31,6 +31,7 @@ import KPICard from "@/components/dashboard/KPICard";
 import { IAInsightsCard } from "@/components/dashboard/IAInsightsCard";
 import UserHelpGuide from "@/components/dashboard/UserHelpGuide";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import { DateRangeFilter, type DateRange } from "@/components/dashboard/DateRangeFilter";
 import { useKPIWithPeriod } from "@/hooks/useKPIWithPeriod";
 import { supabase } from "@/integrations/supabase/client";
@@ -459,6 +460,8 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 };

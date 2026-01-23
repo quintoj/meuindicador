@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import AddTemplateModal from "@/components/store/AddTemplateModal";
 import EditTemplateModal from "@/components/store/EditTemplateModal";
 import AdminHelpGuide from "@/components/admin/AdminHelpGuide";
@@ -719,6 +720,8 @@ const Store = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Footer />
     </div>
   );
 };

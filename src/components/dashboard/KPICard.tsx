@@ -8,12 +8,23 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { LucideIcon, TrendingUp, TrendingDown, Target, MoreVertical, BarChart3, Edit, Trash2, Calendar, History } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { LucideIcon, TrendingUp, TrendingDown, Target, MoreVertical, Trash2, Calendar, History, Loader2 } from "lucide-react";
 import { useState } from "react";
-import EditIndicatorModal from "./EditIndicatorModal";
 import { LancamentoModal } from "./LancamentoModal";
 import { HistoryModal } from "./HistoryModal";
 import { calculateIndicatorStatus, getDifferenceTextWithDirection, type IndicatorDirection } from "@/utils/indicators";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface KPI {
   id: string;
@@ -45,9 +56,11 @@ interface KPICardProps {
 }
 
 const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
 
   const formatValue = (value: number, format: string) => {
     switch (format) {
@@ -153,15 +166,6 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsEditModalOpen(true);
-                  }}
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Editar Indicador
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
                     setIsHistoryModalOpen(true);
                   }}
                 >
@@ -172,12 +176,12 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsEditModalOpen(true);
+                    setShowDeleteDialog(true);
                   }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
-                  Remover
+                  Remover do Dashboard
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -265,14 +269,6 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
         onSaveSuccess={handleUpdate}
       />
 
-      {/* Modal de Edição do Indicador */}
-      <EditIndicatorModal
-        open={isEditModalOpen}
-        onOpenChange={setIsEditModalOpen}
-        kpi={kpi}
-        onUpdateSuccess={handleUpdate}
-      />
-
       {/* Modal de Histórico */}
       <HistoryModal
         isOpen={isHistoryModalOpen}
@@ -285,6 +281,86 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
         }}
         onDataChange={handleUpdate}
       />
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover indicador do dashboard?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a remover <strong>{kpi.name}</strong> do seu dashboard.
+              <br /><br />
+              ⚠️ <strong>Importante:</strong> O histórico de lançamentos será mantido e você pode adicionar este indicador novamente pela Loja de Indicadores.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  setDeleting(true);
+
+                  const { data: { user } } = await supabase.auth.getUser();
+
+                  if (!user) {
+                    toast({
+                      variant: "destructive",
+                      title: "Erro",
+                      description: "Você precisa estar logado.",
+                    });
+                    setDeleting(false);
+                    return;
+                  }
+
+                  // Desativar o indicador (soft delete)
+                  const { error } = await (supabase as any)
+                    .from('user_indicators')
+                    .update({
+                      is_active: false,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', kpi.id)
+                    .eq('user_id', user.id);
+
+                  if (error) {
+                    throw error;
+                  }
+
+                  toast({
+                    title: "Indicador removido!",
+                    description: `${kpi.name} foi removido do seu dashboard.`,
+                  });
+
+                  setShowDeleteDialog(false);
+                  handleUpdate();
+
+                } catch (err: any) {
+                  console.error('Erro ao remover indicador:', err);
+                  toast({
+                    variant: "destructive",
+                    title: "Erro ao remover",
+                    description: err.message || "Não foi possível remover o indicador.",
+                  });
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Removendo...
+                </>
+              ) : (
+                "Remover"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

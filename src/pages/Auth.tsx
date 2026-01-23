@@ -419,9 +419,17 @@ const Auth = () => {
         </Card>
 
         {/* Footer */}
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade
-        </p>
+        <div className="text-center text-sm text-muted-foreground mt-6 space-y-2">
+          <p>
+            Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade
+          </p>
+          <p>
+            © {new Date().getFullYear()} Meu Indicador. Todos os direitos reservados.
+          </p>
+          <p className="text-xs">
+            Versão {import.meta.env.VITE_APP_VERSION || '1.0.0'}
+          </p>
+        </div>
       </div>
     </div>
   );
