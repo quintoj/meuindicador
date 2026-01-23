@@ -24,7 +24,8 @@ interface AddTemplateModalProps {
 }
 
 interface Variable {
-  name: string;
+  slug: string; // Used in formula (e.g., ind_peso)
+  label: string; // Displayed to user (e.g., Indicador de Peso)
   type: 'fixed' | 'daily';
 }
 
@@ -47,7 +48,8 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
 
   // Gerenciador de Variáveis
   const [variables, setVariables] = useState<Variable[]>([]);
-  const [newVarName, setNewVarName] = useState("");
+  const [newVarSlug, setNewVarSlug] = useState("");
+  const [newVarLabel, setNewVarLabel] = useState("");
   const [newVarType, setNewVarType] = useState<'fixed' | 'daily'>('fixed');
 
   const [loading, setLoading] = useState(false);
@@ -66,33 +68,35 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
   };
 
   const handleAddVariable = () => {
-    if (!newVarName.trim()) {
+    if (!newVarSlug.trim()) {
       toast({
         variant: "destructive",
-        title: "Nome vazio",
-        description: "Digite um nome para a variável.",
+        title: "Nome técnico vazio",
+        description: "Digite um nome técnico para a variável usar na fórmula.",
       });
       return;
     }
 
-    const snakeCaseName = toSnakeCase(newVarName);
+    const snakeCaseSlug = toSnakeCase(newVarSlug);
+    const finalLabel = newVarLabel.trim() || snakeCaseSlug;
 
     // Verificar duplicata
-    if (variables.some(v => v.name === snakeCaseName)) {
+    if (variables.some(v => v.slug === snakeCaseSlug)) {
       toast({
         variant: "destructive",
         title: "Variável duplicada",
-        description: `A variável "${snakeCaseName}" já existe.`,
+        description: `A variável "${snakeCaseSlug}" já existe.`,
       });
       return;
     }
 
-    setVariables([...variables, { name: snakeCaseName, type: newVarType }]);
-    setNewVarName("");
+    setVariables([...variables, { slug: snakeCaseSlug, label: finalLabel, type: newVarType }]);
+    setNewVarSlug("");
+    setNewVarLabel("");
 
     toast({
       title: "Variável adicionada!",
-      description: `"${snakeCaseName}" (${newVarType === 'fixed' ? 'Fixo' : 'Diário'})`,
+      description: `"${finalLabel}" (${snakeCaseSlug})`,
     });
   };
 
@@ -139,7 +143,8 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
     setDefaultWarningThreshold("");
     setDefaultCriticalThreshold("");
     setVariables([]);
-    setNewVarName("");
+    setNewVarSlug("");
+    setNewVarLabel("");
     setNewVarType('fixed');
   };
 
@@ -166,10 +171,10 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
         return;
       }
 
-      // Construir input_fields JSON
+      // Construir input_fields JSON - SALVAR COMO OBJETOS {slug, nome}
       const inputFields = {
-        fixed: variables.filter(v => v.type === 'fixed').map(v => v.name),
-        daily: variables.filter(v => v.type === 'daily').map(v => v.name),
+        fixed: variables.filter(v => v.type === 'fixed').map(v => ({ slug: v.slug, nome: v.label })),
+        daily: variables.filter(v => v.type === 'daily').map(v => ({ slug: v.slug, nome: v.label })),
       };
 
       // Inserir novo template
@@ -190,7 +195,8 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
           default_warning_threshold: defaultWarningThreshold ? parseFloat(defaultWarningThreshold) : null,
           default_critical_threshold: defaultCriticalThreshold ? parseFloat(defaultCriticalThreshold) : null,
           input_fields: inputFields,
-          required_data: JSON.stringify(variables.map(v => v.name)), // Fallback
+          input_fields: inputFields,
+          required_data: JSON.stringify(variables.map(v => v.slug)), // Fallback legacy (array de strings)
         });
 
       if (error) {
@@ -513,54 +519,74 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Add Variable Form */}
-              <div className="flex space-x-2">
-                <Input
-                  value={newVarName}
-                  onChange={(e) => setNewVarName(e.target.value)}
-                  placeholder="Nome da variável (ex: cancelamentos)"
-                  disabled={loading}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddVariable();
-                    }
-                  }}
-                  className="flex-1"
-                />
-                <Select value={newVarType} onValueChange={(val) => setNewVarType(val as 'fixed' | 'daily')} disabled={loading}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fixed">📌 Fixo</SelectItem>
-                    <SelectItem value="daily">📅 Diário</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  onClick={handleAddVariable}
-                  disabled={loading || !newVarName.trim()}
-                  className="bg-primary"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
+              {/* Add Variable Form */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs">Nome Display (Ex: Clientes Novos)</Label>
+                  <Input
+                    value={newVarLabel}
+                    onChange={(e) => setNewVarLabel(e.target.value)}
+                    placeholder="Nome amigável para o usuário"
+                    disabled={loading}
+                    className="flex-1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Código/Slug (Ex: clientes_novos)</Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      value={newVarSlug}
+                      onChange={(e) => setNewVarSlug(e.target.value)}
+                      placeholder="Nome na fórmula"
+                      disabled={loading}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddVariable();
+                        }
+                      }}
+                      className="flex-1 font-mono"
+                    />
+                    <Select value={newVarType} onValueChange={(val) => setNewVarType(val as 'fixed' | 'daily')} disabled={loading}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">Fixo</SelectItem>
+                        <SelectItem value="daily">Diário</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      onClick={handleAddVariable}
+                      disabled={loading || !newVarSlug.trim()}
+                      className="bg-primary"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Este é o código que será usado na fórmula (sem espaços).
+                  </p>
+                </div>
               </div>
 
               {/* Variables List */}
               {variables.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Variáveis Criadas ({variables.length})</Label>
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm font-semibold">Variáveis Definidas ({variables.length})</Label>
                   <div className="flex flex-wrap gap-2">
                     {variables.map((variable, index) => (
                       <Badge
                         key={index}
                         variant={variable.type === 'fixed' ? 'default' : 'secondary'}
-                        className="text-sm px-3 py-1"
+                        className="text-sm px-3 py-1 flex items-center gap-2"
                       >
-                        {variable.type === 'fixed' ? '📌' : '📅'} {variable.name}
+                        <span className="font-bold">{variable.label}</span>
+                        <code className="text-xs bg-black/20 px-1 rounded">{variable.slug}</code>
                         <button
                           onClick={() => handleRemoveVariable(index)}
-                          className="ml-2 hover:text-destructive"
+                          className="hover:text-destructive"
                           disabled={loading}
                         >
                           <X className="w-3 h-3" />
@@ -607,9 +633,9 @@ const AddTemplateModal = ({ open, onOpenChange, onSuccess }: AddTemplateModalPro
                         key={index}
                         variant="outline"
                         className="cursor-pointer hover:bg-primary/20 transition-colors px-3 py-1"
-                        onClick={() => handleInsertVariable(variable.name)}
+                        onClick={() => handleInsertVariable(variable.slug)}
                       >
-                        {variable.name}
+                        {variable.label}
                       </Badge>
                     ))}
                   </div>

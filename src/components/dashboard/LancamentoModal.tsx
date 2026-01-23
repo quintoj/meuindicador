@@ -370,17 +370,6 @@ export const LancamentoModal = ({
                     {temVariaveis ? (
                         <>
                             <div className="space-y-6">
-                                {/* Fórmula Visual */}
-                                <Alert className="bg-blue-50 border-blue-200 text-blue-800">
-                                    <Info className="h-4 w-4 text-blue-500" />
-                                    <AlertDescription>
-                                        <span className="font-medium block mb-1">Fórmula de Cálculo:</span>
-                                        <code className="text-xs bg-blue-100 px-2 py-1 rounded block w-full text-center font-mono">
-                                            {indicador.template?.formula}
-                                        </code>
-                                    </AlertDescription>
-                                </Alert>
-
                                 <div className="space-y-4 border rounded-lg p-4 bg-muted/20">
                                     <div className="flex items-center justify-between mb-2">
                                         <h4 className="text-sm font-semibold flex items-center gap-2">

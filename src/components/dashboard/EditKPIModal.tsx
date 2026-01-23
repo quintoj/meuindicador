@@ -121,11 +121,12 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
   // DERIVED STATE com useMemo - DEVE VIR ANTES DE TUDO!
   // ============================================
 
+  // Modificar a estrutura para suportar {slug, label}
   const { numericFields, textFields, showDynamicInputs } = useMemo(() => {
     console.log('🔍 ===== CALCULANDO CAMPOS (useMemo) =====');
     const template = kpi.template;
 
-    let dynamicFields: string[] = [];
+    let dynamicFields: { slug: string; label: string }[] = [];
 
     // Extrair campos do input_fields (JSONB)
     if (template?.input_fields) {
@@ -140,7 +141,15 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
 
         const fixed = Array.isArray(inputFieldsJSON.fixed) ? inputFieldsJSON.fixed : [];
         const daily = Array.isArray(inputFieldsJSON.daily) ? inputFieldsJSON.daily : [];
-        dynamicFields = [...fixed, ...daily];
+        const rawFields = [...fixed, ...daily];
+
+        // Normalizar para objeto {slug, label}
+        dynamicFields = rawFields.map((field: any) => {
+          if (typeof field === 'string') {
+            return { slug: field, label: field };
+          }
+          return { slug: field.slug, label: field.nome || field.name || field.slug };
+        });
 
         console.log('✅ Campos de input_fields:', dynamicFields);
       } catch (err) {
@@ -151,12 +160,14 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     // FALLBACK: required_data
     if (dynamicFields.length === 0 && template?.required_data) {
       try {
+        let rawData: string[] = [];
         if (Array.isArray(template.required_data)) {
-          dynamicFields = template.required_data;
+          rawData = template.required_data;
         } else if (typeof template.required_data === 'string') {
           const parsed = JSON.parse(template.required_data);
-          dynamicFields = Array.isArray(parsed) ? parsed : [];
+          rawData = Array.isArray(parsed) ? parsed : [];
         }
+        dynamicFields = rawData.map(str => ({ slug: str, label: str }));
         console.log('⚠️ Usando fallback required_data:', dynamicFields);
       } catch (err) {
         console.error('❌ Erro ao processar required_data:', err);
@@ -164,8 +175,8 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     }
 
     // Filtrar campos
-    const numeric = dynamicFields.filter(field => isNumericField(field));
-    const text = dynamicFields.filter(field => isTextField(field));
+    const numeric = dynamicFields.filter(field => isNumericField(field.slug));
+    const text = dynamicFields.filter(field => isTextField(field.slug));
     const showDynamic = numeric.length > 0;
 
     console.log('✅ Resultado:', { numeric, text, showDynamic });
@@ -261,7 +272,8 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
         // Combinar campos fixed e daily
         const fixedFields = inputFields.fixed || [];
         const dailyFields = inputFields.daily || [];
-        dataArray = [...fixedFields, ...dailyFields];
+        // Extract just slugs for data array to keep compatibility
+        dataArray = [...fixedFields, ...dailyFields].map((f: any) => typeof f === 'string' ? f : f.slug);
 
         console.log('✅ Campos extraídos de input_fields:', dataArray);
       } catch (err) {
@@ -330,7 +342,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
               // Combinar campos fixed e daily
               const fixedFields = inputFields.fixed || [];
               const dailyFields = inputFields.daily || [];
-              dataArray = [...fixedFields, ...dailyFields];
+              dataArray = [...fixedFields, ...dailyFields].map((f: any) => typeof f === 'string' ? f : f.slug);
 
               console.log('Campos extraídos de input_fields:', dataArray);
             } catch (err) {
@@ -388,9 +400,9 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
     try {
       // Verificar se todos os campos numéricos foram preenchidos
       const allFilled = numericFields.every(field => {
-        const value = dynamicInputs[field];
+        const value = dynamicInputs[field.slug];
         const isFilled = value !== undefined && value !== '' && !isNaN(parseFloat(value));
-        console.log(`  - "${field}": valor="${value}", preenchido=${isFilled}`);
+        console.log(`  - "${field.slug}": valor="${value}", preenchido=${isFilled}`);
         return isFilled;
       });
 
@@ -475,11 +487,11 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       const normalizedNumbers = numbers.map(n => n.replace(',', '.'));
 
       // Mapear números para campos na ordem (usar dynamicFields do derived state)
-      const fieldsToFill = numericFields.length > 0 ? numericFields : Object.keys(dynamicInputs);
+      const fieldsToFill = numericFields.length > 0 ? numericFields.map(f => f.slug) : Object.keys(dynamicInputs);
       const newInputs = { ...dynamicInputs };
-      fieldsToFill.forEach((field, index) => {
+      fieldsToFill.forEach((fieldSlug, index) => {
         if (index < normalizedNumbers.length) {
-          newInputs[field] = normalizedNumbers[index];
+          newInputs[fieldSlug] = normalizedNumbers[index];
         }
       });
 
@@ -523,7 +535,7 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
       // Validação mais permissiva: se há campos, verificar se foram preenchidos
       if (numericFields.length > 0) {
         const anyFilled = numericFields.some(field => {
-          const value = dynamicInputs[field];
+          const value = dynamicInputs[field.slug];
           return value !== undefined && value !== '' && !isNaN(parseFloat(value));
         });
 
@@ -700,24 +712,24 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
 
                 {/* Campos Numéricos */}
                 {numericFields.map((field, index) => (
-                  <div key={`dynamic-${field}-${index}`} className="space-y-1">
+                  <div key={`dynamic-${field.slug}-${index}`} className="space-y-1">
                     <Label htmlFor={`field-${index}`} className="capitalize text-xs text-gray-500 dark:text-gray-400 flex items-center space-x-2">
                       <Calculator className="w-3 h-3 text-primary" />
-                      <span>{field.replace(/_/g, ' ')}</span>
+                      <span>{field.label} ({field.slug})</span>
                     </Label>
                     <Input
                       id={`field-${index}`}
                       type="number"
                       step="0.01"
-                      value={dynamicInputs[field] || ''}
-                      onChange={(e) => handleDynamicInputChange(field, e.target.value)}
+                      value={dynamicInputs[field.slug] || ''}
+                      onChange={(e) => handleDynamicInputChange(field.slug, e.target.value)}
                       className="bg-white dark:bg-slate-800 h-10"
                       placeholder="0"
                       disabled={loading}
                     />
                     <p className="text-xs text-muted-foreground flex items-start space-x-1">
                       <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                      <span>{getFieldHint(field)}</span>
+                      <span>{getFieldHint(field.slug)}</span>
                     </p>
                   </div>
                 ))}
@@ -733,15 +745,15 @@ const EditKPIModal = ({ open, onOpenChange, kpi, onSave }: EditKPIModalProps) =>
                     {textFields.map((field, index) => (
                       <div key={`text-${index}`} className="space-y-1">
                         <Label htmlFor={`text-field-${index}`} className="capitalize text-xs text-gray-500 dark:text-gray-400">
-                          {field.replace(/_/g, ' ')}
+                          {field.label}
                         </Label>
                         <Input
                           id={`text-field-${index}`}
                           type="text"
-                          value={dynamicInputs[field] || ''}
-                          onChange={(e) => handleDynamicInputChange(field, e.target.value)}
+                          value={dynamicInputs[field.slug] || ''}
+                          onChange={(e) => handleDynamicInputChange(field.slug, e.target.value)}
                           className="h-9 bg-muted/30 border-muted"
-                          placeholder={`Ex: ${field.replace(/_/g, ' ').toLowerCase()}`}
+                          placeholder={`Ex: ${field.label.toLowerCase()}`}
                           disabled={loading}
                         />
                       </div>

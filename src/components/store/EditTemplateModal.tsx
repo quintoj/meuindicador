@@ -36,7 +36,8 @@ interface EditTemplateModalProps {
 }
 
 interface Variable {
-  name: string;
+  slug: string;
+  label: string;
   type: 'fixed' | 'daily';
 }
 
@@ -59,7 +60,8 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
 
   // Gerenciador de Variáveis
   const [variables, setVariables] = useState<Variable[]>([]);
-  const [newVarName, setNewVarName] = useState("");
+  const [newVarSlug, setNewVarSlug] = useState("");
+  const [newVarLabel, setNewVarLabel] = useState("");
   const [newVarType, setNewVarType] = useState<'fixed' | 'daily'>('fixed');
 
   const [loading, setLoading] = useState(false);
@@ -122,9 +124,16 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
           const fixed = Array.isArray(inputFieldsJSON.fixed) ? inputFieldsJSON.fixed : [];
           const daily = Array.isArray(inputFieldsJSON.daily) ? inputFieldsJSON.daily : [];
 
+          const processField = (field: any, type: 'fixed' | 'daily'): Variable => {
+            if (typeof field === 'string') {
+              return { slug: field, label: field, type };
+            }
+            return { slug: field.slug, label: field.nome || field.name || field.slug, type };
+          };
+
           loadedVariables = [
-            ...fixed.map((name: string) => ({ name, type: 'fixed' as const })),
-            ...daily.map((name: string) => ({ name, type: 'daily' as const })),
+            ...fixed.map((f: any) => processField(f, 'fixed')),
+            ...daily.map((d: any) => processField(d, 'daily')),
           ];
 
           console.log('✅ Variáveis carregadas de input_fields:', loadedVariables);
@@ -145,7 +154,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
             requiredDataArray = Array.isArray(parsed) ? parsed : [];
           }
 
-          loadedVariables = requiredDataArray.map(name => ({ name, type: 'fixed' as const }));
+          loadedVariables = requiredDataArray.map(name => ({ slug: name, label: name, type: 'fixed' as const }));
           console.log('⚠️ Usando fallback required_data:', loadedVariables);
         } catch (err) {
           console.error('❌ Erro ao parsear required_data:', err);
@@ -165,32 +174,35 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
   };
 
   const handleAddVariable = () => {
-    if (!newVarName.trim()) {
+    if (!newVarSlug.trim()) {
       toast({
         variant: "destructive",
-        title: "Nome vazio",
-        description: "Digite um nome para a variável.",
+        title: "Nome técnico vazio",
+        description: "Digite um nome técnico para a variável usar na fórmula.",
       });
       return;
     }
 
-    const snakeCaseName = toSnakeCase(newVarName);
+    const snakeCaseSlug = toSnakeCase(newVarSlug);
+    const finalLabel = newVarLabel.trim() || snakeCaseSlug;
 
-    if (variables.some(v => v.name === snakeCaseName)) {
+    // Verificar duplicata
+    if (variables.some(v => v.slug === snakeCaseSlug)) {
       toast({
         variant: "destructive",
         title: "Variável duplicada",
-        description: `A variável "${snakeCaseName}" já existe.`,
+        description: `A variável "${snakeCaseSlug}" já existe.`,
       });
       return;
     }
 
-    setVariables([...variables, { name: snakeCaseName, type: newVarType }]);
-    setNewVarName("");
+    setVariables([...variables, { slug: snakeCaseSlug, label: finalLabel, type: newVarType }]);
+    setNewVarSlug("");
+    setNewVarLabel("");
 
     toast({
       title: "Variável adicionada!",
-      description: `"${snakeCaseName}" (${newVarType === 'fixed' ? 'Fixo' : 'Diário'})`,
+      description: `"${finalLabel}" (${snakeCaseSlug})`,
     });
   };
 
@@ -254,10 +266,10 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
         return;
       }
 
-      // Construir input_fields JSON
+      // Construir input_fields JSON - SALVAR COMO OBJETOS {slug, nome}
       const inputFields = {
-        fixed: variables.filter(v => v.type === 'fixed').map(v => v.name),
-        daily: variables.filter(v => v.type === 'daily').map(v => v.name),
+        fixed: variables.filter(v => v.type === 'fixed').map(v => ({ slug: v.slug, nome: v.label })),
+        daily: variables.filter(v => v.type === 'daily').map(v => ({ slug: v.slug, nome: v.label })),
       };
 
       // Atualizar template
@@ -278,7 +290,7 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
           default_warning_threshold: defaultWarningThreshold ? parseFloat(defaultWarningThreshold) : null,
           default_critical_threshold: defaultCriticalThreshold ? parseFloat(defaultCriticalThreshold) : null,
           input_fields: inputFields,
-          required_data: JSON.stringify(variables.map(v => v.name)), // Fallback
+          required_data: JSON.stringify(variables.map(v => v.slug)), // Fallback legacy (array de strings)
           updated_at: new Date().toISOString(),
         })
         .eq('id', template.id);
@@ -640,53 +652,69 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
                 <CardTitle className="text-lg">🔧 Variáveis do Indicador</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex space-x-2">
-                  <Input
-                    value={newVarName}
-                    onChange={(e) => setNewVarName(e.target.value)}
-                    placeholder="Nome da variável"
-                    disabled={loading}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddVariable();
-                      }
-                    }}
-                    className="flex-1"
-                  />
-                  <Select value={newVarType} onValueChange={(val) => setNewVarType(val as 'fixed' | 'daily')} disabled={loading}>
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">📌 Fixo</SelectItem>
-                      <SelectItem value="daily">📅 Diário</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    onClick={handleAddVariable}
-                    disabled={loading || !newVarName.trim()}
-                    className="bg-primary"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Nome Display (Ex: Clientes Novos)</Label>
+                    <Input
+                      value={newVarLabel}
+                      onChange={(e) => setNewVarLabel(e.target.value)}
+                      placeholder="Nome amigável para o usuário"
+                      disabled={loading}
+                      className="flex-1"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Código/Slug (Ex: clientes_novos)</Label>
+                    <div className="flex space-x-2">
+                      <Input
+                        value={newVarSlug}
+                        onChange={(e) => setNewVarSlug(e.target.value)}
+                        placeholder="Nome na fórmula"
+                        disabled={loading}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddVariable();
+                          }
+                        }}
+                        className="flex-1 font-mono"
+                      />
+                      <Select value={newVarType} onValueChange={(val) => setNewVarType(val as 'fixed' | 'daily')} disabled={loading}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixo</SelectItem>
+                          <SelectItem value="daily">Diário</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={handleAddVariable}
+                        disabled={loading || !newVarSlug.trim()}
+                        className="bg-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
                 {variables.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Variáveis Criadas ({variables.length})</Label>
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-sm font-semibold">Variáveis Definidas ({variables.length})</Label>
                     <div className="flex flex-wrap gap-2">
                       {variables.map((variable, index) => (
                         <Badge
                           key={index}
                           variant={variable.type === 'fixed' ? 'default' : 'secondary'}
-                          className="text-sm px-3 py-1"
+                          className="text-sm px-3 py-1 flex items-center gap-2"
                         >
-                          {variable.type === 'fixed' ? '📌' : '📅'} {variable.name}
+                          <span className="font-bold">{variable.label}</span>
+                          <code className="text-xs bg-black/20 px-1 rounded">{variable.slug}</code>
                           <button
                             onClick={() => handleRemoveVariable(index)}
-                            className="ml-2 hover:text-destructive"
+                            className="hover:text-destructive"
                             disabled={loading}
                           >
                             <X className="w-3 h-3" />
@@ -724,9 +752,9 @@ const EditTemplateModal = ({ open, onOpenChange, template, onSuccess }: EditTemp
                           key={index}
                           variant="outline"
                           className="cursor-pointer hover:bg-primary/20 transition-colors px-3 py-1"
-                          onClick={() => handleInsertVariable(variable.name)}
+                          onClick={() => handleInsertVariable(variable.slug)}
                         >
-                          {variable.name}
+                          {variable.label}
                         </Badge>
                       ))}
                     </div>
