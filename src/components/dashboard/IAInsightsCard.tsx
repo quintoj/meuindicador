@@ -17,8 +17,24 @@ export const IAInsightsCard = ({ kpis }: IAInsightsCardProps) => {
         setLoading(true);
         setAnalise(null); // Limpa análise anterior
         try {
-            // Passa os dados reais para o serviço
-            const resultado = await analisarIndicadores(kpis);
+            // Determinar o nicho predominante para contextualizar a análise
+            const segmentCounts: Record<string, number> = {};
+            kpis.forEach(kpi => {
+                const seg = kpi.segment || 'Geral';
+                segmentCounts[seg] = (segmentCounts[seg] || 0) + 1;
+            });
+
+            let niche = 'Geral';
+            let maxCount = 0;
+            Object.entries(segmentCounts).forEach(([seg, count]) => {
+                if (count > maxCount) {
+                    maxCount = count;
+                    niche = seg;
+                }
+            });
+
+            // Passa os dados reais e o nicho para o serviço
+            const resultado = await analisarIndicadores(kpis, niche);
             setAnalise(resultado);
         } catch (error) {
             console.error("Erro ao gerar análise:", error);
