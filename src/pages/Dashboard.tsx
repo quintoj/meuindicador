@@ -36,7 +36,7 @@ import { DateRangeFilter, type DateRange } from "@/components/dashboard/DateRang
 import { useKPIWithPeriod } from "@/hooks/useKPIWithPeriod";
 import { supabase } from "@/integrations/supabase/client";
 import { getIndicatorStatus, type IndicatorDirection } from "@/utils/indicators";
-import { startOfMonth, endOfMonth } from "date-fns";
+import { startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import type { LucideIcon } from "lucide-react";
 
 interface KPI {
@@ -310,6 +310,10 @@ const Dashboard = () => {
     danger: 0    // Vermelho (Abaixo/Fora da Meta)
   });
 
+  // Calcular dias no período para exibir no card
+  // Adiciona 1 pois diferença entre hoje e hoje é 0, mas conta como 1 dia
+  const daysInPeriod = differenceInDays(dateRange.to, dateRange.from) + 1;
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -413,7 +417,12 @@ const Dashboard = () => {
                 {mappedKPIs.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {mappedKPIs.map((kpi) => (
-                      <KPICard key={kpi.id} kpi={kpi} onUpdate={handleRefreshData} />
+                      <KPICard
+                        key={kpi.id}
+                        kpi={kpi}
+                        onUpdate={handleRefreshData}
+                        daysInPeriod={daysInPeriod}
+                      />
                     ))}
                   </div>
                 ) : (

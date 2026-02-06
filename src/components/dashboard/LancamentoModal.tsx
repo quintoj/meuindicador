@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Loader2, Save, Trash2, Calculator, Info } from "lucide-react";
+import { Calendar, Loader2, Save, Trash2, Calculator, Info, History } from "lucide-react";
 import { useLancamentos } from "@/hooks/useLancamentos";
 import { evaluateFormula, validateVariables, type FormulaVariable } from "@/utils/formulaEngine";
 
@@ -35,6 +35,7 @@ interface LancamentoModalProps {
         };
     };
     onSaveSuccess?: () => void;
+    onOpenHistory?: () => void;
 }
 
 export const LancamentoModal = ({
@@ -42,6 +43,7 @@ export const LancamentoModal = ({
     onClose,
     indicador,
     onSaveSuccess,
+    onOpenHistory,
 }: LancamentoModalProps) => {
     const [data, setData] = useState<string>("");
     const [valor, setValor] = useState<string>("");
@@ -490,9 +492,22 @@ export const LancamentoModal = ({
                 {/* Histórico e Tabela */}
                 <Separator className="my-4" />
                 <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-muted-foreground">
-                        Histórico Recente
-                    </h3>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-muted-foreground">
+                            Histórico Recente
+                        </h3>
+                        {onOpenHistory && (
+                            <Button
+                                variant="link"
+                                size="sm"
+                                className="h-auto p-0 text-primary"
+                                onClick={onOpenHistory}
+                            >
+                                <History className="w-3 h-3 mr-1" />
+                                Ver completo
+                            </Button>
+                        )}
+                    </div>
 
                     {historicoFiltrado.length > 0 ? (
                         <div className="border rounded-lg overflow-hidden">
@@ -532,13 +547,23 @@ export const LancamentoModal = ({
                         </div>
                     ) : (
                         <div className="text-center py-6 border rounded-lg bg-muted/10">
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground mb-2">
                                 Nenhum lançamento recente encontrado.
                             </p>
+                            {onOpenHistory && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={onOpenHistory}
+                                >
+                                    <History className="w-3 h-3 mr-2" />
+                                    Ver histórico completo
+                                </Button>
+                            )}
                         </div>
                     )}
                 </div>
-            </DialogContent>
-        </Dialog>
+            </DialogContent >
+        </Dialog >
     );
 };

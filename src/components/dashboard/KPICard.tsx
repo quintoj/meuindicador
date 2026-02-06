@@ -53,9 +53,10 @@ interface KPI {
 interface KPICardProps {
   kpi: KPI;
   onUpdate?: () => void;
+  daysInPeriod?: number;
 }
 
-const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
+const KPICard = ({ kpi, onUpdate, daysInPeriod = 30 }: KPICardProps) => {
   const [isLancamentoModalOpen, setIsLancamentoModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -198,16 +199,23 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
 
               {/* Contexto de Metas - Solicitado pelo usuário */}
               <div className="flex flex-col gap-1 text-xs text-muted-foreground mt-1">
-                <div className="flex items-center space-x-2">
-                  <Target className="w-3.5 h-3.5" />
-                  <span>Meta Período: {kpi.format === 'percentage' ? formatValue(kpi.target, kpi.format) : formatValue(Math.round(kpi.target), kpi.format)}</span> {/* Arredondando visualmente */}
-                </div>
-                {kpi.originalTarget !== undefined && kpi.originalTarget !== kpi.target && (
+                {/* Meta Original (Meta Completa / Mensal) */}
+                {kpi.originalTarget !== undefined && (
                   <div className="flex items-center space-x-2 text-primary/80 font-medium bg-primary/5 w-fit px-1.5 py-0.5 rounded">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span title="Meta cheia definida no cadastro">Meta Mensal: {formatValue(kpi.originalTarget, kpi.format)}</span>
+                    <Target className="w-3.5 h-3.5" />
+                    <span title="Meta cheia definida no cadastro">
+                      🎯 Meta Completa: {formatValue(kpi.originalTarget, kpi.format)} (objetivo mensal)
+                    </span>
                   </div>
                 )}
+
+                {/* Meta Proporcional (Período) */}
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>
+                    📅 Meta Proporcional: {kpi.format === 'percentage' ? formatValue(kpi.target, kpi.format) : formatValue(Math.round(kpi.target), kpi.format)} (baseado em {daysInPeriod} dias)
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -267,6 +275,10 @@ const KPICard = ({ kpi, onUpdate }: KPICardProps) => {
           } : undefined,
         }}
         onSaveSuccess={handleUpdate}
+        onOpenHistory={() => {
+          setIsLancamentoModalOpen(false);
+          setIsHistoryModalOpen(true);
+        }}
       />
 
       {/* Modal de Histórico */}
